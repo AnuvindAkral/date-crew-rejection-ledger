@@ -160,19 +160,35 @@ function computeSessionMetrics(store) {
 }
 
 // The learning-loop metric: of the acceptance insights the matchmaker captured,
-// how many were explicitly consulted in a later recommendation. This measures
-// whether the loop is used, not whether it improves matching.
+// how many were explicitly consulted in a later recommendation. Only insights
+// that had a subsequent recommendation opportunity count in the denominator; an
+// insight captured with no share after it is not counted as unconsulted.
 function computeInsightConsultation(store) {
   const insights = store.state.insights || [];
-  const consulted = new Set();
-  for (const s of store.state.shares || []) {
-    for (const id of s.consultedInsightIds || []) consulted.add(id);
+  const shares = store.state.shares || [];
+  let eligible = 0;
+  let consulted = 0;
+  let noOpportunity = 0;
+  for (const ins of insights) {
+    const after = new Date(ins.recordedAt);
+    const subsequent = shares.filter(
+      (s) => s.clientId === ins.clientId && new Date(s.sharedAt) > after
+    );
+    if (subsequent.length === 0) {
+      noOpportunity += 1;
+      continue;
+    }
+    eligible += 1;
+    if (subsequent.some((s) => (s.consultedInsightIds || []).includes(ins.id))) {
+      consulted += 1;
+    }
   }
-  const consultedCount = insights.filter((i) => consulted.has(i.id)).length;
   return {
     total: insights.length,
-    consulted: consultedCount,
-    rate: insights.length ? consultedCount / insights.length : null,
+    eligible,
+    noOpportunity,
+    consulted,
+    rate: eligible ? consulted / eligible : null,
   };
 }
 

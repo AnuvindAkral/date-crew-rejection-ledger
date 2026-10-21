@@ -278,8 +278,8 @@ function renderMeasurement() {
 
     <h2>Learning loop · acceptance insight consultation</h2>
     <div class="panel">
-      <div class="metric-value">${s.insightConsultation.consulted} / ${s.insightConsultation.total}${s.insightConsultation.rate == null ? "" : ` = ${Math.round(s.insightConsultation.rate * 100)}%`}</div>
-      <p class="note">Of the acceptance insights the matchmaker captured, how many were explicitly consulted in a later recommendation. This measures whether the learning loop is used, not whether it improves matching. Recommendation quality and accepted-to-meeting outcomes are later-validation questions, not two-week claims.</p>
+      <div class="metric-value">${s.insightConsultation.consulted} / ${s.insightConsultation.eligible}${s.insightConsultation.rate == null ? " · no opportunity yet" : ` = ${Math.round(s.insightConsultation.rate * 100)}%`}</div>
+      <p class="note">Of the acceptance insights that had a subsequent recommendation to inform, how many were explicitly consulted.${s.insightConsultation.noOpportunity ? ` ${s.insightConsultation.noOpportunity} insight${s.insightConsultation.noOpportunity === 1 ? "" : "s"} with no subsequent recommendation yet ${s.insightConsultation.noOpportunity === 1 ? "is" : "are"} not counted as unconsulted.` : ""} This measures whether the learning loop is used, not whether it improves matching. Recommendation quality and accepted-to-meeting outcomes are later-validation questions, not two-week claims.</p>
     </div>
 
     ${ref}`;

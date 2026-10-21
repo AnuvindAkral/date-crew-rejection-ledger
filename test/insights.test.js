@@ -50,10 +50,21 @@ test("ambiguous acceptance: surprise with no dimensions still records the insigh
   assert.equal(ins.surprise, "Not sure what worked yet");
 });
 
-test("an insight never consulted in a later recommendation is not counted as consulted", () => {
-  const store = fresh(); // seed has one insight (i1); no share consults it
+test("an insight with no subsequent recommendation is not counted as unconsulted", () => {
+  const store = fresh(); // seed insight i1 has no share after it
   const m = computeInsightConsultation(store);
   assert.equal(m.total, 1);
+  assert.equal(m.eligible, 0);
+  assert.equal(m.noOpportunity, 1);
+  assert.equal(m.rate, null);
+});
+
+test("an insight with a subsequent recommendation it was not consulted in is unconsulted", () => {
+  const store = fresh();
+  store.share({ clientId: "c1", candidateId: "cand5", consultedInsightIds: [], actor: "aisha" });
+  const m = computeInsightConsultation(store);
+  assert.equal(m.eligible, 1);
+  assert.equal(m.noOpportunity, 0);
   assert.equal(m.consulted, 0);
   assert.equal(m.rate, 0);
 });
@@ -63,6 +74,7 @@ test("consulting an insight in a later share is counted", () => {
   store.share({ clientId: "c1", candidateId: "cand5", consultedInsightIds: ["i1"], actor: "aisha" });
   const m = computeInsightConsultation(store);
   assert.equal(m.total, 1);
+  assert.equal(m.eligible, 1);
   assert.equal(m.consulted, 1);
   assert.equal(m.rate, 1);
 });

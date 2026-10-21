@@ -1,6 +1,6 @@
 # Demo script
 
-A word-for-word run of the prototype, about 90 seconds. Start the server first (`node src/server.js`), open http://localhost:4321, and press **Reset demo** if the store has been used before.
+A word-for-word run of the prototype, in two beats, about two minutes total. Start the server first (`node src/server.js`), open http://localhost:4321, and press **Reset demo** before each beat.
 
 Synthetic data only. Every name is invented.
 
@@ -38,6 +38,26 @@ Synthetic data only. Every name is invented.
 
 ---
 
+## Beat 2: the acceptance debrief (about 45 seconds)
+
+Press **Reset demo** first.
+
+**7. Open Priya S.** Point at the "Acceptance insights" panel. It shows one positive capture: *accepted Arjun T. — Personality or temperament — "Warmer and calmer in person than his profile suggested. Location mattered less than she expected."*
+
+> Say: "The ledger captures the rejections. This captures the other half: what a yes taught us. Nothing here was inferred from the profile. The matchmaker wrote it down."
+
+**8. Send Aarav M.** The send review now carries the insight, with a checkbox. Tick the checkbox, then Send.
+
+> Say: "The matchmaker explicitly marks that this insight informed the recommendation. That is the whole loop: capture the yes, then consult it at the next send."
+
+**9. Open Measurement.** The learning-loop number reads 1 / 1 = 100% consulted.
+
+> Say: "It measures whether the loop is used, not whether matching improved. And an insight with no later recommendation is not counted as unconsulted."
+
+**Stop here.** The debrief adds the positive signal the ledger lacked, without asking the client to defend a rejection.
+
+---
+
 ## Optional: the other states (about 30 seconds each)
 
 - **Rahul M.** shows a confirmed dealbreaker. Send **Nikhil S.** and the deterministic conflict card fires on *Diet or lifestyle*, quoting the client's own note. Send **Dev P.** for a clean send, and **Siddharth B.** for the untagged state, which is never shown as compatible.
@@ -49,4 +69,4 @@ Synthetic data only. Every name is invented.
 
 ## What to say about what the demo does not prove
 
-The demo shows the mechanism works. It does not claim ARCR falls, that completed meetings rise, or that any business metric moves. Those need the pilot in `PILOT_PLAN.md`, not a local prototype.
+The demo shows the mechanism works. It does not claim the debrief improves matching, that ARCR falls, that completed meetings rise, or that any business metric moves. Those need the pilot in `PILOT_PLAN.md` and the unrun interviews in `docs/INTERVIEW_PROTOCOL.md`, not a local prototype.

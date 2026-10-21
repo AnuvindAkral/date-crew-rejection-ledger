@@ -1,0 +1,21 @@
+#!/bin/sh
+set -u
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+    echo "pre-commit: gitleaks not installed on PATH, commit blocked." >&2
+    echo "Install gitleaks (brew install gitleaks) or fix PATH, then retry the commit." >&2
+    exit 1
+fi
+
+ROOT="$(git rev-parse --show-toplevel)" || exit 1
+
+STATUS=0
+gitleaks protect --staged --redact --source "$ROOT" || STATUS=$?
+
+if [ "$STATUS" -ne 0 ]; then
+    echo "pre-commit: staged secret scan failed, commit blocked." >&2
+    echo "Resolve scanner errors or remove staged secrets, then retry." >&2
+    exit 1
+fi
+
+exit 0

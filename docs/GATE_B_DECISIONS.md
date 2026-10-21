@@ -126,3 +126,13 @@ The model is justified in exactly one spot: normalising unstructured free-text r
 | 2 | The real between-client variance of ARCR | The single input that would let a powered pilot be sized |
 | 3 | Whether the repeat-with-later-accept pattern exists in TDC's population at all | If it does not, the ledger's distinctive mechanism has no target |
 | 4 | Whether matchmakers accept capture in the control arm as measurement only | The D2 trade depends on it |
+
+---
+
+## D12. Recurrence is not avoidability
+
+**Decision.** ARCR stays the primary outcome as a recurrence measure. Avoidability is a separate overlay, reported only where pre-send evidence establishes a plausible opportunity to act differently, never inferred from the eventual rejection alone. The numerator is reported as three sub-rates: hard-conflict, contradiction-conditional and plain-recurrence.
+
+**Alternative rejected.** Presenting ARCR as "avoidable" rejections, which overstates what a prior rejection on the same dimension proves.
+
+**Trade accepted.** The primary metric is now plainly a recurrence count rather than a proved-waste count, which is less punchy but does not overclaim. The hard-conflict sub-rate is where avoidability is strongest, because a client-confirmed dealbreaker is a deterministic rule the ledger could have caught at send time.

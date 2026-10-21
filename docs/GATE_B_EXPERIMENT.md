@@ -60,8 +60,7 @@ The control arm's structured capture is a measurement instrument, not a workflow
 
 **Secondary analyses.**
 
-- ARCR-hard and ARCR-soft separately.
-- A contradiction-conditional sub-rate, being the share of eligible shares rejected on a dimension with both a prior rejection and a later acceptance, reported to attribute any ARCR movement to the distinctive mechanism rather than to simple repeat-conflict surfacing.
+- The three ARCR sub-rates separately: hard-conflict, contradiction-conditional and plain-recurrence, so recurrence is not mistaken for avoidability.
 - Capture rate, capture latency, flag action rate, contradiction surface rate, matchmaker minutes per profile, by arm.
 - Rejection coding accuracy, from a blind second-coder audit of a sample of rejection dimensions against the verbatim free text, blind to arm. This gates interpretation of ARCR.
 - A within-client paired sensitivity analysis for intervention-arm clients only, acknowledging the time confound and reporting it as exploratory.

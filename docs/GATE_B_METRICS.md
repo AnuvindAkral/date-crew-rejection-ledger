@@ -99,16 +99,19 @@ The primary outcome. This is the metric the Rejection Ledger is built to move.
 
 If the client has no prior rejection history, the ledger had nothing to surface and the share is not eligible. If the candidate is untagged, no comparison was possible and the share is not eligible.
 
-**Numerator: avoidable rejections.** An eligible shared profile is in the numerator when it was rejected, and the rejection's coded dimension matches a dimension on which the client has at least one coded rejection observation with a timestamp earlier than the share timestamp.
+**Numerator: repeat-conflict rejections.** An eligible shared profile is in the numerator when it was rejected, and the rejection's coded dimension matches a dimension on which the client has at least one coded rejection observation with a timestamp earlier than the share timestamp.
 
-**Two tiers of avoidability, reported separately and combined as the primary.**
+**Recurrence against avoidability.** ARCR measures recurrence, not avoidability. A prior rejection on a dimension does not by itself mean the next profile on that dimension should have been withheld. Avoidability is a stricter overlay, reported only where evidence available before sending establishes a plausible opportunity to act differently, and is never inferred from the eventual rejection alone. ARCR stays the primary outcome because it is measurable; it is not claimed to be avoidability.
 
-| Tier | Prior evidence at share time | Path that could have prevented it |
+**Three reporting sub-rates.** The ARCR numerator is reported as three sub-rates, so a recurrence is not mistaken for a proved avoidable miss.
+
+| Sub-rate | Definition | Avoidability |
 | --- | --- | --- |
-| ARCR-hard | A confirmed dealbreaker on the dimension, or a prior rejection classified as a dealbreaker | The deterministic conflict check fires and the matchmaker reviews |
-| ARCR-soft | A prior rejection on the dimension classified as preference or uncertain | The ledger surfaces the history and prompts a review or a clarification question |
+| Hard-conflict rate | Eligible shares rejected on a dimension where a client-confirmed dealbreaker existed at send time | Strongest. The deterministic check would have fired |
+| Contradiction-conditional rate | Eligible shares rejected on a dimension with both a prior rejection and a later acceptance before the share | A prompt, not a block, so avoidability is weaker |
+| Plain-recurrence rate | Eligible shares rejected on a dimension with a prior rejection but neither a confirmed dealbreaker nor a later acceptance | Weakest. Prior preference or uncertain feedback |
 
-Primary = ARCR-hard plus ARCR-soft. ARCR-hard is also reported alone, because it is the deterministic, most defensible subset.
+The sub-rates are reported separately. They overlap where a share is both hard and contradictory, which is rare; overlaps are reported as such rather than forced into one bucket. Primary remains the combined ARCR.
 
 **Lookback window.** All coded rejection observations for the client with a timestamp before the share. No hard expiry by default, because a client's dealbreakers do not expire automatically. A 180-day cap is run as a sensitivity check to confirm the result is not driven by stale history.
 
@@ -122,12 +125,12 @@ Primary = ARCR-hard plus ARCR-soft. ARCR-hard is also reported alone, because it
 - It still sits in the denominator as a shared profile if the share was otherwise eligible.
 - The uncoded rejection rate is reported alongside ARCR, and ARCR is only interpretable when that rate is stable and low.
 
-**Adjudication of avoidability.** A rejection is avoidable only when both conditions hold:
+**Avoidability overlay.** A rejection is reported as avoidable only when both conditions held at send time:
 
-1. Prior evidence on the same dimension existed and was coded before the share time.
+1. Prior evidence on the same dimension was coded before the share time.
 2. The candidate carried that dimension tag at share time, from an objective sourcing or onboarding record, so the ledger's check could plausibly have fired. Rejection-derived dimensions are client-scoped and never become a candidate's objective tags.
 
-A rejection is not avoidable merely because the client rejected a similar-looking profile. Similarity without a shared coded dimension is not evidence.
+A rejection is not avoidable merely because the client rejected a similar-looking profile. Similarity without a shared coded dimension is not evidence, and the eventual rejection is not, by itself, proof that the matchmaker could have acted differently. Avoidability is a separate report layered on top of ARCR, not the definition of ARCR.
 
 **Aggregation across clients.**
 
@@ -135,7 +138,7 @@ A rejection is not avoidable merely because the client rejected a similar-lookin
 - Pooled ARCR = sum of numerators / sum of denominators, reported as descriptive.
 - The primary analysis compares client-level ARCR between arms, because the client is the unit of assignment and the unit on which the intervention operates.
 
-**Attribution.** ARCR falls when either the deterministic dealbreaker check catches a repeat, or the contradiction prompt does. A fall driven only by repeat-conflict surfacing is a valid but less distinctive win. The contradiction-conditional sub-rate, being the share of eligible shares rejected on a dimension with both a prior rejection and a later acceptance, is measured separately to show how much of any movement the distinctive mechanism explains.
+**Attribution.** ARCR falls when the deterministic dealbreaker check catches a repeat, or the contradiction prompt does, or a plain repeat is avoided. The three sub-rates show which. A fall driven only by plain recurrence is a valid but least distinctive win; a fall in the contradiction-conditional sub-rate is the distinctive mechanism working.
 
 ---
 

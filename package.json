@@ -1,0 +1,13 @@
+{
+  "name": "date-crew-rejection-ledger",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Matchmaker-side Rejection Ledger prototype for The Date Crew product growth assessment. Zero dependencies, synthetic data only.",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

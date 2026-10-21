@@ -2,6 +2,20 @@
 
 The decisions that shaped the product, the trade-offs each one accepted, and the alternatives rejected for each.
 
+## 0. How the direction moved, and why
+
+This started as a rejection ledger. That is worth saying plainly, because the reasoning is better than the thing it first pointed at, and a reader is entitled to know the earlier idea was considered rather than assumed away.
+
+**The first idea.** Capture each rejection as a dimension and a flag the moment it happens, roll it up per client, and surface it at the next send. The appeal was that the founder's published line supports it: she learns very little from the onboarding call and far more from the reasons people reject someone. A ledger is the obvious way to bank that.
+
+**Why it was not enough.** A ledger only pays off if the matchmaker looks at it at the moment it would change a decision. That is the weak joint in the whole idea, and nothing about a ledger fixes it: the data is captured well, and then not used. Worse, the ledger makes the matchmaker do work, a ledger they do not otherwise want to maintain, which is the surest way to end up with a system nobody keeps up.
+
+**The revision.** The same evidence points somewhere more direct. The 35% in the brief is not about how many rejections get recorded, it is about how many profiles could have been stopped before they went out. So the intervention became the moment of sharing: take the criteria the client has already given and put them in front of the matchmaker, on the profile, at the point of sending, where a decision is already being made. The ledger did not disappear, it became the evidence the check reads.
+
+**The two are not rivals.** Recording rejections is still how the criteria become true, because a rejection is how a client says what matters. The difference is where the work sits. A ledger asks the matchmaker to maintain a record. A check asks them to look at one screen at a moment they are already working.
+
+**What this means for the assessment.** The hypothesis is the check, not the ledger. The measurement is built around the check, and the ledger is supporting machinery. If the check does not change what gets sent, the ledger would not have saved it either.
+
 ## 1. Keep the client in the middle, not in the tool
 
 **Decision.** The product is matchmaker-side. There is no client-facing surface, no client app, no self-service dashboard. The only client interaction is a question the matchmaker asks in a normal check-in.
@@ -124,7 +138,31 @@ The decisions that shaped the product, the trade-offs each one accepted, and the
 
 **Rejected.** Measuring the rate after the fact from rejections alone. It answers a different question, it cannot separate a conflict that was caught from one that reached the client, and it cannot be computed for the control arm, which is the comparison the whole pilot design rests on.
 
-## 16. What the prototype is and is not
+## 16. Three kinds of evidence, kept apart
+
+**Decision.** The product-wide truth rule is:
+
+> A client's explicit answer establishes their preference. Historical behaviour is context, not proof. A matchmaker's inference is a hypothesis, not a confirmed rule.
+
+Three things are therefore never the same thing in the data model, the interface or the measurement:
+
+| On the file | Tier | What it does |
+| --- | --- | --- |
+| What the client confirmed | `confirmed_dealbreaker`, `confirmed_preference` | Every profile is checked against it. A confirmed dealbreaker that is broken is a conflict |
+| What the client said at intake | `stated_preference` | Checked, and shown as advice rather than a no |
+| A pattern the matchmaker noticed | `observation` | Shown as context, offered to the client, and it never fires a finding and never excludes a candidate |
+
+A confirmed rule has to be backed by something the client said: either an answer recorded from them, or their own words written down. The write is refused otherwise, and it is recorded as an observation instead. Accepting a profile and rejecting a profile write no criterion at all, in any code path.
+
+A contradiction is a decision that disagrees with a criterion the client has on file, on the same dimension and later than the criterion. It is shown with both sides and it decides nothing. It is not, and was never, the old "rejected once then accepted once" pattern, which is history rather than a disagreement.
+
+**Trade-off.** A matchmaker who has only noticed a pattern cannot turn it into a rule without putting it to the client, and a confirmed rule needs the client's words. That is friction at the moment of recording, and it is the cost of not guessing on a client's behalf. It also means the matchmaker has to write down what the client said, which is work the onboarding call does not do for them.
+
+**Rejected.** Treating the client's own history as their preference, because it is available and it is free. It is also wrong: people reject profiles for reasons that are not their preferences, and accept profiles that break the preferences they stated. Reading history as a rule would have produced a confident no that the client never gave.
+
+**Rejected.** Letting a matchmaker record a confirmed rule without any record of what the client said. It would have been less friction, and it would have made the whole check rest on the matchmaker's memory, which is the thing the product is meant to support rather than replace.
+
+## 17. What the prototype is and is not
 
 **Decision.** The prototype is a mechanism demonstration on synthetic data, with a proposed pilot written up in `PILOT_PLAN.md` and a validation plan in `docs/VALIDATION_PLAN.md`. It is not described as production-ready, and no result is claimed from it.
 
@@ -146,6 +184,8 @@ Every feature that exists in the build, classified against the brief's four cate
 | Rejection capture: dimension, severity, value, verbatim | Core | It is the mechanism that creates the history the check runs on |
 | The five findings, including incomplete and prior rejection | Core | They are what stops missing data reading as a clean result |
 | Criterion direction, recorded rather than inferred | Core | A requirement and a prohibition are opposite criteria, and only the client can say which is which |
+| Three tiers of evidence, with the observation tier kept out of the decision | Core | A matchmaker's hypothesis is not the client's preference, and treating it as one would rule people out on a guess |
+| A confirmed rule needs the client's own words | Core | Without a record of what the client said, a rule is the matchmaker's memory, which is what the tool exists to replace |
 | The audited primary outcome over all shares | Core | A rate over the checked profiles improves when people stop checking |
 | The adoption guardrail, reported separately | Core | It is the thing that can move on its own, so it has to be visible next to the rate |
 | Matchmaker records and the acting-as selector | Supporting | Attribution is needed for per-matchmaker reads, and the brief asks for a matchmaker to be selectable |

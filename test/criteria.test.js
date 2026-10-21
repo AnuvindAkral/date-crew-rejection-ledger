@@ -31,6 +31,7 @@ test("a requirement and a prohibition are opposite criteria, not the same one", 
     values: ["Vegetarian"],
     kind: "confirmed_dealbreaker",
     actor: "Aisha Verma",
+  note: "The client said so",
   });
   const veg = withAttr({ diet_lifestyle: "Vegetarian" });
   const nonVeg = withAttr({ diet_lifestyle: "Non-vegetarian" });
@@ -50,6 +51,7 @@ test("a prohibition and a requirement on the same value read opposite ways", () 
     values: ["Vegetarian"],
     kind: "confirmed_dealbreaker",
     actor: "Aisha Verma",
+  note: "The client said so",
   });
   const veg = withAttr({ diet_lifestyle: "Vegetarian" });
   const nonVeg = withAttr({ diet_lifestyle: "Non-vegetarian" });
@@ -67,12 +69,19 @@ test("a smoking dealbreaker and a smoking preference are not equivalent", () => 
     values: ["Occasional smoker", "Regular smoker"],
     kind: "confirmed_dealbreaker",
     actor: "Aisha Verma",
+  note: "The client said so",
   });
   const smoker = withAttr({ smoking_habit: "Regular smoker" });
   const result = evaluateSend(store, "c3", smoker);
   assert.equal(result.state, "conflict", "a firm no");
   assert.equal(result.findings[0].basis, "confirmed_dealbreaker");
-  assert.ok(result.findings[0].sentence.includes("must not be"));
+  assert.equal(result.findings[0].criterion.operator, "must_not_be");
+  // The sentence is written for a matchmaker, not for a rule engine.
+  assert.ok(
+    result.findings[0].sentence.includes("will not accept"),
+    "the sentence says what the client will not accept: " + result.findings[0].sentence
+  );
+  assert.ok(result.findings[0].sentence.includes("regular smoker"));
   assert.ok(result.findings[0].sentence.includes("Regular smoker"));
 });
 
@@ -103,6 +112,7 @@ test("a confirmed preference is firmer than a stated one, and still not a no", (
     values: ["Non-smoker"],
     kind: "confirmed_preference",
     actor: "Aisha Verma",
+  note: "The client said so",
   });
   const result = evaluateSend(store, "c3", withAttr({ smoking_habit: "Regular smoker" }));
   assert.equal(result.state, "preference_mismatch");
@@ -119,6 +129,7 @@ test("a forbidden set covers more than one value", () => {
     values: ["Occasional smoker", "Regular smoker"],
     kind: "confirmed_dealbreaker",
     actor: "Aisha Verma",
+  note: "The client said so",
   });
   assert.equal(evaluateSend(store, "c3", withAttr({ smoking_habit: "Occasional smoker" })).state, "conflict");
   assert.equal(evaluateSend(store, "c3", withAttr({ smoking_habit: "Regular smoker" })).state, "conflict");
@@ -134,11 +145,15 @@ test("a missing value is unknown, never a match and never a conflict", () => {
     values: ["Regular smoker"],
     kind: "confirmed_dealbreaker",
     actor: "Aisha Verma",
+  note: "The client said so",
   });
   const result = evaluateSend(store, "c3", withAttr({ location_city_tier: "Pune" }));
   assert.equal(result.state, "incomplete");
   assert.equal(result.findings[0].basis, "unknown");
-  assert.ok(result.findings[0].sentence.includes("not recorded"));
+  assert.ok(
+    result.findings[0].sentence.includes("does not say"),
+    "the sentence says the information is absent: " + result.findings[0].sentence
+  );
 });
 
 test("a value outside the vocabulary is refused", () => {
@@ -203,10 +218,20 @@ test("changing a criterion keeps the old one, with the date it was in force", ()
 
 test("a criterion that was changed does not reach back to change an old share", () => {
   const store = fresh();
+  // The client has a criterion on file before the profile goes out.
+  store.setPreference({
+    clientId: "c3",
+    dimension: "smoking_habit",
+    operator: "must_be",
+    values: ["Non-smoker"],
+    kind: "stated_preference",
+    actor: "Aisha Verma",
+  });
   const share = store.share({ clientId: "c3", candidateId: "cand10", actor: "Aisha Verma" });
   const auditBefore = store.state.audits.find((a) => a.shareId === share.id);
   assert.equal(auditBefore.classification, "clean");
 
+  // The client changes their mind afterwards.
   store.setPreference({
     clientId: "c3",
     dimension: "smoking_habit",
@@ -214,11 +239,21 @@ test("a criterion that was changed does not reach back to change an old share", 
     values: ["Regular smoker"],
     kind: "confirmed_dealbreaker",
     actor: "Aisha Verma",
+  note: "The client said so",
   });
   store.runAudit({ by: "Aisha Verma" });
   const auditAfter = store.state.audits.find((a) => a.shareId === share.id);
   // The share is judged against the file as it was, so it is still clean.
   assert.equal(auditAfter.classification, "clean");
+});
+
+test("a profile sent to a client with nothing on file is not a clean result", () => {
+  const store = fresh();
+  // Meera has no criteria and no rejections.
+  const share = store.share({ clientId: "c3", candidateId: "cand10", actor: "Farhan Qureshi" });
+  const audit = store.state.audits.find((a) => a.shareId === share.id);
+  assert.equal(audit.classification, "no_criteria");
+  assert.notEqual(audit.classification, "clean");
 });
 
 test("repeated evidence is not silenced by a settled criterion", () => {
@@ -230,6 +265,7 @@ test("repeated evidence is not silenced by a settled criterion", () => {
     values: ["Non-smoker"],
     kind: "confirmed_preference",
     actor: "Aisha Verma",
+  note: "The client said so",
   });
   // The client settles it, then rejects someone on the same dimension.
   const settled = store.activeCriteria("c3").find((c) => c.dimension === "smoking_habit");
@@ -246,7 +282,7 @@ test("repeated evidence is not silenced by a settled criterion", () => {
     result.findings.some((f) => f.type === "repeat" && f.basis === "history"),
     "the new rejection is surfaced, not swallowed by the settled rule"
   );
-  assert.ok(result.findings.some((f) => f.sentence.includes("after settling it")));
+  assert.ok(result.findings.some((f) => f.sentence.includes("after confirming it")));
   assert.ok(settled);
 });
 
@@ -269,6 +305,7 @@ test("an old rejection does not keep firing once the criterion is settled", () =
     values: ["Non-smoker"],
     kind: "confirmed_preference",
     actor: "Aisha Verma",
+  note: "The client said so",
   });
   const result = evaluateSend(store, "c3", withAttr({ smoking_habit: "Non-smoker" }));
   assert.ok(!result.findings.some((f) => f.type === "repeat"));
@@ -284,6 +321,7 @@ test("a withdrawn criterion stops applying, and the history says so", () => {
     values: ["Regular smoker"],
     kind: "confirmed_dealbreaker",
     actor: "Aisha Verma",
+  note: "The client said so",
   });
   assert.equal(
     evaluateSend(store, "c3", withAttr({ smoking_habit: "Regular smoker" })).state,
@@ -305,4 +343,46 @@ test("the verdict is decided by the direction, not by the kind", () => {
   const forbid = { dimension: "diet_lifestyle", operator: "must_not_be", values: ["Vegetarian"], kind: "confirmed_dealbreaker" };
   assert.equal(criterionVerdict(forbid, "Vegetarian"), "violated");
   assert.equal(criterionVerdict(forbid, "Non-vegetarian"), "satisfied");
+});
+
+test("a client answer can record a criterion that has changed", () => {
+  const store = fresh();
+  // The client used to want the Bangalore metro, and now says something else.
+  store.recordClientAnswer({
+    clientId: "c1",
+    dimension: "location_city_tier",
+    answer: "preference",
+    operator: "must_not_be",
+    values: ["Tier 2 city"],
+    kind: "confirmed_dealbreaker",
+    verbatim: "She has changed her mind, a tier 2 city is a no now",
+    actor: "Aisha Verma",
+  });
+  const crit = store.activeCriteria("c1").find((c) => c.dimension === "location_city_tier");
+  assert.equal(crit.operator, "must_not_be");
+  assert.deepEqual(crit.values, ["Tier 2 city"]);
+  assert.equal(crit.kind, "confirmed_dealbreaker");
+  assert.equal(crit.source, "client_answer");
+  assert.equal(crit.note, "She has changed her mind, a tier 2 city is a no now");
+  // The version it replaced is kept, with the date it was in force.
+  const history = store.criterionHistory("c1").filter((c) => c.dimension === "location_city_tier");
+  assert.equal(history.length, 2);
+  assert.equal(history[0].status, "superseded");
+  assert.equal(history[1].status, "active");
+});
+
+test("a client answer without their words writes no criterion", () => {
+  const store = fresh();
+  const before = store.activeCriteria("c1").length;
+  store.recordClientAnswer({
+    clientId: "c1",
+    dimension: "location_city_tier",
+    answer: "preference",
+    operator: "must_be",
+    values: ["Pune"],
+    kind: "confirmed_preference",
+    verbatim: "   ",
+    actor: "Aisha Verma",
+  });
+  assert.equal(store.activeCriteria("c1").length, before, "nothing was written");
 });

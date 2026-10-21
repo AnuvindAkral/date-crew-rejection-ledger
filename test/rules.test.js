@@ -12,14 +12,28 @@ function fresh() {
   return createStore(buildSeed(NOW));
 }
 
-test("contradiction fires when a dimension was rejected then later accepted", () => {
+test("a contradiction fires when a decision disagrees with a criterion on file", () => {
   const store = fresh();
-  const cand = store.candidate("cand5"); // location_city_tier
-  const result = evaluateSend(store, "c1", cand);
-  assert.equal(result.state, "contradiction");
-  assert.ok(
-    result.findings.some((f) => f.type === "contradiction" && f.dimension === "location_city_tier")
-  );
+  // Priya confirmed she will not accept a smoker, and she later accepted Arjun
+  // T., whose profile lists him as a regular smoker. The two do not agree.
+  const result = evaluateSend(store, "c1", store.candidate("cand6"));
+  const contradiction = result.findings.find((f) => f.type === "contradiction");
+  assert.ok(contradiction, "the contradiction is raised");
+  assert.equal(contradiction.dimension, "smoking_habit");
+  assert.equal(contradiction.decisions[0].candidateName, "Arjun T.");
+  assert.equal(contradiction.decisions[0].kind, "accepted");
+  // Both pieces of evidence are shown, and neither is treated as the answer.
+  assert.ok(contradiction.sentence.includes("Arjun T."));
+  assert.ok(contradiction.sentence.includes("only the client can say which is right"));
+});
+
+test("accepting one profile and rejecting another is not a contradiction by itself", () => {
+  const store = fresh();
+  // Priya rejected three profiles over location and accepted a fourth. That is a
+  // record of what happened, and on its own it proves nothing about what she
+  // wants, so it is not a contradiction.
+  const result = evaluateSend(store, "c1", store.candidate("cand5"));
+  assert.ok(!result.findings.some((f) => f.type === "contradiction" && f.dimension === "location_city_tier"));
 });
 
 test("confirmed dealbreaker fires a hard conflict", () => {
@@ -53,11 +67,16 @@ test("untagged candidate is untagged, never treated as compatible", () => {
   assert.equal(result.state, "untagged");
 });
 
-test("a prior rejection without acceptance is a repeat, not a contradiction", () => {
+test("a prior rejection with nothing on file is a note about history, not a conflict", () => {
   const store = fresh();
-  const cand = store.candidate("cand11"); // education, rejected once, no acceptance
+  // Manav was rejected over education, and Priya has no criterion on education.
+  // There is nothing to compare against, so it is reported as what happened.
+  const cand = store.candidate("cand11");
   const result = evaluateSend(store, "c1", cand);
-  assert.equal(result.state, "repeat");
+  assert.ok(result.findings.some((f) => f.type === "repeat" && f.dimension === "education"));
+  // His location and smoking are not recorded, and Priya has criteria on both,
+  // so those are missing information rather than a clean result.
+  assert.ok(result.findings.some((f) => f.type === "incomplete" && f.dimension === "location_city_tier"));
 });
 
 test("a likely_dealbreaker rejection alone never becomes a hard conflict", () => {
@@ -98,20 +117,25 @@ test("a confirmed dealbreaker only fires when the candidate's value matches it",
 
 test("client clarification settles the contradiction on that dimension", () => {
   const store = fresh();
+  const before = evaluateSend(store, "c1", store.candidate("cand6"));
+  assert.ok(before.findings.some((f) => f.type === "contradiction"));
   store.recordClientAnswer({
     clientId: "c1",
-    dimension: "location_city_tier",
+    dimension: "smoking_habit",
     answer: "preference",
-    value: "Bangalore metro",
-    verbatim: "Location is a preference, not a dealbreaker",
+    operator: "must_be",
+    values: ["Non-smoker"],
+    kind: "confirmed_preference",
+    verbatim: "She has changed her mind about smoking",
     actor: "aisha",
   });
   const result = evaluateSend(store, "c1", store.candidate("cand6"));
-  // The contradiction on location is settled. What is left is the education
-  // history, and for Karan we do not know his education, so the finding is
-  // missing information rather than a repeat.
-  assert.ok(!result.findings.some((f) => f.type === "contradiction"));
-  assert.equal(result.state, "incomplete");
+  // The acceptance of Arjun now agrees with the criterion, so the contradiction
+  // has gone. The criterion it replaced is still on the record.
+  assert.ok(!result.findings.some((f) => f.type === "contradiction" && f.dimension === "smoking_habit"));
+  const history = store.criterionHistory("c1").filter((c) => c.dimension === "smoking_habit");
+  assert.equal(history.length, 2);
+  assert.equal(history[0].status, "superseded");
 });
 
 test("client clarification to dealbreaker turns a contradiction into a conflict", () => {

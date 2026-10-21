@@ -38,21 +38,21 @@ test("the audit finds the conflicts the criteria imply, with the components apar
   // preference is counted under the firmer one, so the two add up to the
   // numerator rather than double counting it.
   assert.equal(b.softMismatchShares, 2);
-  assert.equal(b.hardConflictShares, 2);
-  assert.equal(b.conflictShares, 4);
+  assert.equal(b.hardConflictShares, 3);
+  assert.equal(b.conflictShares, 5);
   // Nothing in the seeded history is clean. The one profile that matched every
   // criterion still had an unknown dimension, because the client had rejected
   // on education and that value was not recorded for this profile.
   assert.equal(b.cleanShares, 0);
   // Four of the seven carry a conflict, and the denominator is every share.
-  assert.equal(Math.round(b.rate * 100) / 100, Math.round((4 / 7) * 10000) / 100);
+  assert.equal(Math.round(b.rate * 100) / 100, Math.round((5 / 7) * 10000) / 100);
 });
 
 test("a share whose value is missing is unknown, never clean", () => {
   const store = fresh();
   const m = computeOutcomeMetrics(store);
   const b = m.window.baseline;
-  assert.equal(b.unknownShares, 3);
+  assert.equal(b.unknownShares, 2);
   assert.equal(b.cleanShares, 0);
   // Every share has an audit, and the ones that could not be judged are
   // counted apart rather than folded into either side.
@@ -70,6 +70,7 @@ test("the audit reads the file as it was at the time of the share", () => {
     values: ["Mumbai"],
     kind: "confirmed_dealbreaker",
     actor: "Aisha Verma",
+  note: "The client said so",
   });
   const m = computeOutcomeMetrics(store);
   store.runAudit({ by: "Aisha Verma" });
@@ -115,6 +116,7 @@ test("the control arm is audited the same way, and its rate is what the check wo
     values: ["Non-vegetarian"],
     kind: "confirmed_dealbreaker",
     actor: "Farhan Qureshi",
+  note: "The client said so",
   });
   store.share({ clientId: "c3", candidateId: "cand7", actor: "Farhan Qureshi" });
   const m = computeOutcomeMetrics(store);
@@ -220,7 +222,7 @@ test("the measurement breaks down by matchmaker and by client", () => {
   const m = computeOutcomeMetrics(store);
   assert.ok(m.byMatchmaker.length >= 1);
   assert.equal(m.byMatchmaker[0].shares, 7);
-  assert.equal(m.byMatchmaker[0].conflictShares, 4);
+  assert.equal(m.byMatchmaker[0].conflictShares, 5);
   assert.ok(m.byClient.length >= 2);
   const priya = m.byClient.find((c) => c.clientId === "c1");
   assert.equal(priya.shares, 6);

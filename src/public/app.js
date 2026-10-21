@@ -28,6 +28,7 @@ const REVIEW_LABEL = {
   clean: "No conflict",
   untagged: "Untagged candidate",
   no_history: "No feedback yet",
+  no_criteria: "Nothing to compare against",
   uncoded_only: "History uncoded",
 };
 
@@ -47,6 +48,7 @@ const KIND_LABEL = {
 // A criterion read in words: the direction, the values, and how firm it is.
 function criterionText(c) {
   if (!c) return "";
+  if (c.summary) return c.summary;
   const vals = (c.values || []).join(" or ");
   const dir = c.operator === "must_not_be" ? "must not be" : "must be";
   return `${dir} ${vals} (${KIND_LABEL[c.kind] || "criterion"})`;
@@ -152,7 +154,7 @@ function render() {
   renderToast();
   syncMatchmakerSelect();
   if (view === "measurement") return renderMeasurement();
-  if (view === "candidates") return renderCandidates();
+  if (view === "profiles") return renderProfiles();
   if (view === "client" && currentClientId) return renderClient(currentClientId);
   renderClients();
 }
@@ -195,6 +197,9 @@ function renderClients() {
       </div>
       <button class="btn" data-add-client>Add a client</button>
     </div>
+    <div class="panel quiet-zone">
+      <div class="muted small">Matchmakers on the team: ${(state.matchmakers || []).map((m) => esc(m.name)).join(", ")} · <button class="link-btn" data-add-matchmaker>add a matchmaker</button></div>
+    </div>
     <div class="client-list">
       ${state.clients
         .map(
@@ -202,7 +207,7 @@ function renderClients() {
         <button class="client-card" data-open="${c.id}">
           <div style="flex:1; text-align:left">
             <div class="client-name">${esc(c.name)}</div>
-            <div class="client-sub">${esc(c.city)} · ${esc(c.journey)} · ${c.matchmakerName ? esc(c.matchmakerName) : "unassigned"} · ${c.arm === "intervention" ? "ledger on" : "control"}</div>
+            <div class="client-sub">${esc(c.city)} · ${esc(c.journey)} · ${c.matchmakerName ? esc(c.matchmakerName) : "unassigned"} · ${c.arm === "intervention" ? "check on" : "check hidden"}</div>
           </div>
           ${clientStatusChip(c)}
         </button>`
@@ -211,114 +216,204 @@ function renderClients() {
     </div>`;
 }
 
+function dimNoun(key) {
+  const d = (state.dimensions || []).find((x) => x.key === key);
+  return d ? d.noun : key;
+}
+
+// What has already happened to a profile on the shortlist: held, sent and
+// waiting, or answered. The matchmaker should never have to guess.
+function profileState(clientId, candidateId) {
+  const cl = client(clientId);
+  const sent = (cl.sent || []).filter((s) => s.candidateId === candidateId);
+  if (sent.length) {
+    const latest = sent[0];
+    if (latest.outcome === "rejected") return { tone: "bad", text: "They said no" };
+    if (latest.outcome === "accepted") return { tone: "good", text: "They said yes" };
+    return { tone: "warn", text: "Sent, waiting on the client" };
+  }
+  const held = (cl.resolutions || []).filter(
+    (r) => r.candidateId === candidateId && r.action === "hold"
+  );
+  if (held.length) return { tone: "muted", text: "Held, not sent" };
+  return null;
+}
+
+// One plain line describing what the check found, for a shortlist row. The
+// matchmaker should be able to decide whether to open the card from this line.
+function candidateStatusLine(review) {
+  if (!review) return "Not checked yet";
+  const findings = review.findings || [];
+  const actionable = findings.filter((f) => f.type !== "incomplete");
+  const missing = findings.filter((f) => f.type === "incomplete");
+  if (actionable.length) {
+    return `${actionable.length} thing${actionable.length === 1 ? "" : "s"} to check`;
+  }
+  if (missing.length) {
+    const nouns = missing.map((f) => dimNoun(f.dimension));
+    return `Missing information on ${nouns.join(" and ")}`;
+  }
+  if (review.state === "untagged") return "Nothing recorded about this profile";
+  if (
+    review.state === "no_history" ||
+    review.state === "uncoded_only" ||
+    review.state === "no_criteria"
+  ) {
+    return "Nothing to compare against yet";
+  }
+  return "No conflicts found in the information available";
+}
+
+function statusTone(review) {
+  const findings = (review && review.findings) || [];
+  if (findings.some((f) => f.type === "conflict")) return "bad";
+  if (findings.some((f) => f.type !== "incomplete")) return "warn";
+  if (findings.some((f) => f.type === "incomplete")) return "muted";
+  return "good";
+}
+
+// The client's own record, in the order that matters: what would stop a
+// profile going out, then what they would prefer, then what has changed.
 function renderClient(clientId) {
   const c = client(clientId);
   if (!c) return renderClients();
 
-  const prefs = c.preferences || [];
-  const rows = c.ledger.rows || [];
-  const activePrefs = prefs.filter((p) => p.status === "active");
-  const withdrawn = prefs.filter((p) => p.status !== "active");
-
-  const prefsHtml = activePrefs.length
-    ? activePrefs
-        .map(
-          (p) => `<div class="pref-row">
-            <div class="pref-row-head">
-              <span class="pref-tag ${p.kind === "confirmed_dealbreaker" ? "dealbreaker" : ""}">${esc(dimLabel(p.dimension))} · ${esc(p.operator === "must_not_be" ? "must not be" : "must be")} ${esc((p.values || []).join(" or "))}</span>
-              <button class="link-btn" data-rm-pref="${esc(p.id)}" data-dim="${esc(dimLabel(p.dimension))}">Remove</button>
-            </div>
-            ${p.note ? `<div class="pref-note">“${esc(p.note)}”</div>` : `<div class="pref-note muted small">No note recorded. Add the client's own words.</div>`}
-            <div class="pref-meta">${esc(KIND_LABEL[p.kind] || "criterion")} · ${p.source === "client_answer" ? "confirmed by the client" : "recorded at intake"}${p.recordedBy ? " by " + esc(p.recordedBy) : ""}${p.recordedAt ? " · " + relTime(p.recordedAt) : ""}</div>
-          </div>`
-        )
-        .join("")
-    : `<p class="muted small">Nothing recorded for this client yet. Without a criterion, the check has nothing to compare against and says so rather than reporting no conflict.</p>`;
-
-  const withdrawnHtml = withdrawn.length
-    ? `<div class="pref-meta withdrawn-note">Withdrawn: ${withdrawn
-        .map((p) => `${esc(dimLabel(p.dimension))} ${esc(criterionText(p))}`)
-        .join("; ")}</div>`
-    : "";
-
+  const activePrefs = c.preferences || [];
+  // Three groups, by what the evidence is. A dealbreaker is a firm no the
+  // client confirmed. A preference is something they said, which is advice
+  // unless they confirmed it. An observation is a pattern someone noticed, and
+  // it never rules a profile out on its own.
+  const dealbreakers = activePrefs.filter((p) => p.kind === "confirmed_dealbreaker");
+  const preferences = activePrefs.filter(
+    (p) => p.kind !== "confirmed_dealbreaker" && p.kind !== "observation"
+  );
+  const observations = activePrefs.filter((p) => p.kind === "observation");
   const changes = (c.preferenceEvents || []).slice().reverse();
-  const changesHtml = changes.length
-    ? changes
-        .map(
-          (e) => `<div class="change-row">
-            <span class="ledger-dim">${esc(dimLabel(e.dimension))}</span>
-            <span class="muted small">${
-              e.after === null
-                ? "withdrawn"
-                : `${e.before && criterionText(e.before) !== criterionText(e.after) ? `changed from ${esc(criterionText(e.before))} to ` : ""}${esc(criterionText(e.after))}`
-            } · ${relTime(e.at)}${e.by ? " · " + esc(e.by) : ""}</span>
-          </div>`
-        )
-        .join("")
-    : `<p class="muted small">No changes to the client's criteria yet.</p>`;
 
-  const ledgerHtml = rows.length
-    ? rows
-        .map((r) => {
-          const marker = r.contradiction
-            ? `<div class="contradiction-line"><strong>Contradiction:</strong> rejected ${r.rejectedCount} on ${esc(r.label)}, then accepted ${r.acceptedCount}. Earliest rejection: <span class="q">“${esc(r.earliestRejection.freeText)}”</span></div>`
-            : "";
-          const rule = r.confirmedRule
-            ? `<div class="rule-line">Client-confirmed: ${esc(r.confirmedRule)}</div>`
-            : "";
-          return `
-            <div class="ledger-row">
-              <div class="ledger-head">
-                <span class="ledger-dim">${esc(r.label)}</span>
-                <span class="ledger-counts">rejected ${r.rejectedCount} · accepted ${r.acceptedCount} · ${SEV_LABEL[r.latestSeverity]} · ${relTime(r.latestDate)}</span>
-              </div>
-              ${marker}${rule}
-            </div>`;
-        })
-        .join("")
-    : `<p class="muted small">No rejections logged yet. Capture a rejection to start the ledger.</p>`;
+  const prefRow = (p) => `
+    <div class="pref-row">
+      <div class="pref-row-head">
+        <span class="pref-tag ${p.kind === "confirmed_dealbreaker" ? "dealbreaker" : ""}">${esc(p.firmness)}</span>
+        <span class="pref-dim">${esc(dimLabel(p.dimension))}</span>
+        <button class="link-btn" data-rm-pref="${esc(p.id)}" data-dim="${esc(dimLabel(p.dimension))}">Remove</button>
+      </div>
+      <div class="pref-summary">${esc(p.summary)}</div>
+      ${p.note ? `<div class="pref-note">“${esc(p.note)}”</div>` : ""}
+      <div class="pref-meta">${esc(p.tierLabel || p.sourceLabel)}${p.recordedBy ? " · recorded by " + esc(p.recordedBy) : ""}${p.recordedAt ? " · " + relTime(p.recordedAt) : ""}</div>
+    </div>`;
 
-  const insightsHtml = (c.insights || []).length
-    ? c.insights
-        .map(
-          (i) => `
-        <div class="insight-row">
-          <div class="insight-head">
-            <span class="ledger-dim">accepted ${esc(i.candidateName)}</span>
-            <span class="ledger-counts">${relTime(i.recordedAt)}</span>
-          </div>
-          <div class="taglist">${i.dimensions.length ? i.dimensions.map((d) => `<span class="tag">${esc(dimLabel(d))}</span>`).join("") : `<span class="tag muted">no dimensions recorded</span>`}</div>
-          ${i.surprise ? `<div class="q">“${esc(i.surprise)}”</div>` : `<div class="muted small">no note recorded</div>`}
-        </div>`
-        )
-        .join("")
-    : `<p class="muted small">No acceptance insights yet. Accept a profile to record what mattered or surprised you.</p>`;
+  const wantsHtml =
+    dealbreakers.length || preferences.length || observations.length
+      ? `${dealbreakers.length ? `<div class="subhead">Deal breakers</div><p class="muted small">A firm no the client confirmed. Every profile is checked against it.</p>${dealbreakers.map(prefRow).join("")}` : ""}
+         ${preferences.length ? `<div class="subhead">Preferences</div><p class="muted small">What the client said. Checked every time, and shown as advice rather than a no.</p>${preferences.map(prefRow).join("")}` : ""}
+         ${observations.length ? `<div class="subhead">To check with the client</div><p class="muted small">Patterns someone noticed. They are not treated as something the client said, and nothing is ruled out on them.</p>${observations.map(prefRow).join("")}` : ""}`
+      : `<p class="muted small">Nothing on file for this client yet. Until there is something to compare against, the check can only say that there is nothing to compare against.</p>`;
+
+  const contradictions = c.contradictions || [];
+  const contradictionHtml = contradictions.length
+    ? `<div class="panel attention">
+        <div class="attention-head">Worth resolving</div>
+        ${contradictions
+          .map(
+            (x) => `<p>${esc(criterionText(x.criterion))}. ${esc(
+              x.decisions[0].kind === "accepted" ? "They accepted" : "They turned down"
+            )} ${esc(x.decisions[0].candidateName || "a profile")}${
+              x.decisions[0].value ? `, whose profile listed: ${esc(x.decisions[0].value)}` : ""
+            }. The two do not agree, and only the client can say which is right.</p>`
+          )
+          .join("")}
+        <button class="btn" data-ask-client="${esc(c.id)}" data-dimension="${esc(contradictions[0].dimension)}">Ask the client</button>
+      </div>`
+    : "";
 
   const queueHtml = c.queue.length
     ? c.queue
         .map((cand) => {
-          const rv = cand.review;
-          return `
-          <div class="candidate">
+          const state = profileState(c.id, cand.id);
+          return `<div class="candidate">
             <div class="candidate-head">
               <div>
                 <div class="candidate-name">${esc(cand.name)}</div>
-                <div class="candidate-sub">${esc(cand.city)} · ${esc(cand.profession)} · ${esc(cand.source)}</div>
+                <div class="candidate-sub">${esc(cand.city)} · ${esc(cand.profession)}</div>
               </div>
-              <span class="chip ${rv.state === "clean" ? "clean" : rv.state === "untagged" || rv.state === "no_history" || rv.state === "incomplete" ? "quiet" : rv.state === "conflict" ? "conflict" : "contradiction"}">${REVIEW_LABEL[rv.state]}</span>
+              <span class="status ${state ? state.tone : statusTone(cand.review)}">${esc(state ? state.text : candidateStatusLine(cand.review))}</span>
             </div>
             <div class="taglist">
               ${cand.dimensions.length ? cand.dimensions.map((d) => `<span class="tag">${esc(dimLabel(d))}${valueOf(cand, d) ? ": " + esc(valueOf(cand, d)) : ""}</span>`).join("") : `<span class="tag muted">nothing recorded</span>`}
             </div>
+            ${
+              state
+                ? `<div class="candidate-note">${esc(candidateStatusLine(cand.review))}</div>`
+                : ""
+            }
             <div class="candidate-actions">
-              <button class="btn" data-send="${cand.id}">${rv.state === "clean" ? "Send" : "Review and send"}</button>
-              <button class="btn secondary" data-accept="${cand.id}">Accept</button>
-              <button class="btn ghost" data-reject="${cand.id}">Reject</button>
+              <button class="btn" data-send="${cand.id}">${state && state.text.indexOf("Sent") === 0 ? "Check again" : "Check before sharing"}</button>
             </div>
           </div>`;
         })
         .join("")
-    : `<p class="muted small">Nobody is on this client's shortlist yet. Add a candidate and the check runs against that client's criteria before anything is sent.</p>`;
+    : `<p class="muted small">Nobody is on this client's shortlist. Add a profile and the check runs against what this client has told you.</p>`;
+
+  const sentHtml = (c.sent || []).length
+    ? c.sent
+        .map((s) => {
+          let outcome;
+          let actions = "";
+          if (s.outcome === "rejected") {
+            const reason = s.rejection.dimension
+              ? esc(dimLabel(s.rejection.dimension))
+              : "no reason recorded";
+            outcome = `They said no${s.rejection.dimension ? " over " + reason : ""}`;
+            actions = `<button class="link-btn" data-say-no="${esc(s.candidateId)}">Change</button>`;
+          } else if (s.outcome === "accepted") {
+            outcome = "They said yes";
+            actions = `<button class="link-btn" data-say-yes="${esc(s.candidateId)}">Note what mattered</button>`;
+          } else {
+            outcome = "No answer yet";
+            actions = `<button class="link-btn" data-say-no="${esc(s.candidateId)}">They said no</button><button class="link-btn" data-say-yes="${esc(s.candidateId)}">They said yes</button>`;
+          }
+          return `<div class="sent-row">
+            <div>
+              <div class="candidate-name">${esc(s.candidateName)}</div>
+              <div class="candidate-sub">${s.candidateCity ? esc(s.candidateCity) + " · " : ""}sent ${relTime(s.sharedAt)}${s.actor ? " by " + esc(s.actor) : ""}</div>
+              ${s.rejection && s.rejection.freeText ? `<div class="pref-note">“${esc(s.rejection.freeText)}”</div>` : ""}
+            </div>
+            <div class="sent-side">
+              <span class="status ${s.outcome === "rejected" ? "bad" : s.outcome === "accepted" ? "good" : "muted"}">${esc(outcome)}</span>
+              <div class="candidate-actions">${actions}</div>
+            </div>
+          </div>`;
+        })
+        .join("")
+    : `<p class="muted small">Nothing sent to this client yet.</p>`;
+
+  const changesHtml = changes.length
+    ? changes
+        .map(
+          (e) => `<div class="change-row">
+            <span class="pref-dim">${esc(dimLabel(e.dimension))}</span>
+            <span class="muted small">${
+              e.after === null
+                ? "withdrawn"
+                : `${e.before && e.before.values && e.before.values.join() !== e.after.values.join() ? "changed from " + esc((e.before.values || []).join(" or ")) + " to " : ""}${esc((e.after.values || []).join(" or "))}`
+            } · ${relTime(e.at)}${e.by ? " · " + esc(e.by) : ""}</span>
+          </div>`
+        )
+        .join("")
+    : `<p class="muted small">Nothing has changed since this client was set up.</p>`;
+
+  const feedbackHtml = (c.ledger.rows || []).length
+    ? c.ledger.rows
+        .map(
+          (r) => `<div class="ledger-row">
+            <div class="ledger-head">
+              <span class="ledger-dim">${esc(r.label)}</span>
+              <span class="ledger-counts">${r.rejectedCount} rejected · ${r.acceptedCount} accepted</span>
+            </div>
+          </div>`
+        )
+        .join("")
+    : `<p class="muted small">No rejections recorded yet.</p>`;
 
   $app.innerHTML = `
     <button class="back-link" data-back>← Back to clients</button>
@@ -327,36 +422,37 @@ function renderClient(clientId) {
         <h1>${esc(c.name)}</h1>
         <span class="muted small">${esc(c.city)} · ${esc(c.journey)} · ${c.matchmakerName ? esc(c.matchmakerName) : "unassigned"}</span>
       </div>
-      <div class="arm-control">
-        <span class="muted small">Pilot arm: ${c.arm === "control" ? "control, the check is computed but not shown" : "intervention, the check is shown"}</span>
-        <button class="link-btn" data-set-arm="${c.arm === "control" ? "intervention" : "control"}" data-client="${esc(c.id)}">Move to the ${c.arm === "control" ? "intervention" : "control"} arm</button>
-      </div>
     </div>
 
-    <h2>Preferences</h2>
+    <h2>Preferences and deal breakers</h2>
     <div class="panel">
-      <div class="preflist">${prefsHtml}</div>
-      ${withdrawnHtml}
-      <button class="btn secondary" data-add-pref="${esc(c.id)}">Record what the client said</button>
+      ${wantsHtml}
+      <button class="btn secondary" data-add-pref="${esc(c.id)}">Record something the client said</button>
       <div class="subhead">Changes</div>
       ${changesHtml}
     </div>
 
-    <h2>Rejection ledger</h2>
-    <div class="panel">
-      <div class="completeness">${c.ledger.codedCount} of ${c.ledger.total} rejections coded${c.ledger.uncoded ? ` · ${c.ledger.uncoded} uncoded` : ""}</div>
-      ${ledgerHtml}
-    </div>
+    ${contradictionHtml}
 
-    <h2>Acceptance insights</h2>
-    <div class="panel">
-      ${insightsHtml}
-    </div>
-
-    <h2>Shortlist</h2>
+    <h2>Candidates to review</h2>
     <div class="panel">
       ${queueHtml}
-      <button class="btn secondary" data-add-cand="${esc(c.id)}">Add a candidate to the shortlist</button>
+      <button class="btn secondary" data-add-cand="${esc(c.id)}">Check another profile</button>
+    </div>
+
+    <h2>Profiles sent</h2>
+    <div class="panel">
+      ${sentHtml}
+    </div>
+
+    <details class="panel history">
+      <summary>Match histories</summary>
+      <p class="muted small">What the client has said no to, and what they accepted. This is kept for reference; you do not have to maintain it.</p>
+      ${feedbackHtml}
+    </details>
+
+    <div class="panel quiet-zone">
+      <div class="muted small">Pilot group: ${c.arm === "control" ? "the check is worked out for this client but not shown" : "the check is shown for this client"} · <button class="link-btn" data-set-arm="${c.arm === "control" ? "intervention" : "control"}" data-client="${esc(c.id)}">move to the ${c.arm === "control" ? "shown" : "hidden"} group</button></div>
     </div>`;
 }
 
@@ -364,40 +460,66 @@ function pct(v) {
   return v == null ? "n/a" : `${Math.round(v * 10) / 10}%`;
 }
 
+// A number, in plain words, with the sample it came from. Zero and no data are
+// different things and are shown differently.
+function metricLine(label, value, sample, explain) {
+  if (!sample) {
+    return `<div class="metric-line">
+      <div class="metric-name">${esc(label)}</div>
+      <div class="metric-value none">No data</div>
+      <div class="metric-note">${esc(explain)}</div>
+    </div>`;
+  }
+  return `<div class="metric-line">
+    <div class="metric-name">${esc(label)}</div>
+    <div class="metric-value">${esc(String(value))}</div>
+    <div class="metric-note">${esc(explain)}</div>
+    <div class="metric-sample">out of ${esc(String(sample))} ${sample === 1 ? "profile" : "profiles"}</div>
+  </div>`;
+}
+
+function smallSampleWarning(sample) {
+  if (!sample) return "";
+  if (sample >= 5) return "";
+  return `<p class="note warn">This is a very small sample. Treat it as a prompt to look, not as a finding.</p>`;
+}
+
 function renderMeasurement() {
   const s = state.session;
   const o = s.outcome;
-  const w = o.window;
+  const h = o.headline;
+  const cur = h.current;
+  const before = h.before;
+  const pilotStart = new Date(o.window.pilotStart).toISOString().slice(0, 10);
+  const checked = h.checkedBeforeSending;
+  const eligible = h.eligibleToCheck;
 
-  const ref = `
-    <h2>Reference scenario</h2>
-    <div class="panel">
-      <table class="metrics">
-        <tr><th>Stage</th><th>Count</th><th>Step rate</th></tr>
-        <tr><td>Profiles shared</td><td>1,000</td><td>-</td></tr>
-        <tr><td>Profiles accepted</td><td>310</td><td>31.0%</td></tr>
-        <tr><td>Contact details shared</td><td>210</td><td>67.7%</td></tr>
-        <tr><td>Conversations started</td><td>150</td><td>71.4%</td></tr>
-        <tr><td>Meetings fixed</td><td>75</td><td>50.0%</td></tr>
-        <tr><td>Meetings completed</td><td>42</td><td>56.0%</td></tr>
-      </table>
-      <p class="note">Supplied scenario figures from the assessment brief. About 35% of rejected profiles were reportedly for reasons already stated in client preferences, denominator ambiguous. This is reference context, not this session's data.</p>
-    </div>`;
+  const currentBlock = cur.sent
+    ? `<div class="metric-lines">
+        ${metricLine("Profiles sent", cur.sent, cur.sent, "Profiles shared with a client since the check was introduced.")}
+        ${metricLine("Checked before sending", checked, eligible, "Profiles the matchmaker opened the check for before sending.")}
+        ${metricLine("Potential mismatches found", cur.issues, cur.sent, "Profiles where the check found a conflict with a preference or deal breaker on file.")}
+        ${metricLine("Dealbreaker conflicts that reached clients", cur.dealbreakers, cur.sent, "A confirmed no went out anyway. The matchmaker chose to send it.")}
+        ${metricLine("Preference mismatches that reached clients", cur.mismatches, cur.sent, "A preference was broken, and it went out.")}
+        ${metricLine("Profiles with missing information", cur.missingInformation, cur.sent, "Something was not recorded, so part of the file could not be checked.")}
+        ${metricLine("No conflicts found", cur.noConflicts, cur.sent, "Checked against what was on file, and nothing stood in the way. This is not a statement that the profile was a good match.")}
+        ${metricLine("Nothing to compare against", cur.nothingToCompare, cur.sent, "The client had nothing on file, so the profile could not be judged. These are not counted as conflicts found.")}
+      </div>
+      ${smallSampleWarning(cur.sent)}`
+    : `<p class="muted">No profiles have been sent since the check was introduced on ${esc(pilotStart)}. Send a profile and the numbers will fill in.</p>`;
 
-  const periodRow = (label, b) => `
-    <tr>
-      <td>${label}</td>
-      <td>${b.shares}</td>
-      <td>${b.audited}</td>
-      <td>${b.conflictShares}</td>
-      <td>${b.hardConflictShares}</td>
-      <td>${b.softMismatchShares}</td>
-      <td>${b.unknownShares}</td>
-      <td>${b.cleanShares}</td>
-      <td>${pct(b.rate)}</td>
-    </tr>`;
+  const beforeBlock = before.sent
+    ? `<div class="metric-lines">
+        ${metricLine("Profiles sent", before.sent, before.sent, "The same measure, for the period before the check was introduced.")}
+        ${metricLine("Potential mismatches found", before.issues, before.sent, "Found by reviewing each profile against the file as it was at the time.")}
+        ${metricLine("Profiles with missing information", before.missingInformation, before.sent, "Part of the file could not be checked.")}
+        ${metricLine("No conflicts found", before.noConflicts, before.sent, "Nothing on file stood in the way.")}
+        ${metricLine("Nothing to compare against", before.nothingToCompare, before.sent, "The client had nothing on file at the time.")}
+      </div>
+      ${smallSampleWarning(before.sent)}`
+    : `<p class="muted">No profiles were sent before the check was introduced.</p>`;
 
-  const clientRows = state.clients
+  const rows = state.clients
     .map((c) => {
       const a = c.metricA;
       const b = c.arcr;
@@ -413,41 +535,14 @@ function renderMeasurement() {
     })
     .join("");
 
-  const mmRows = o.byMatchmaker
-    .map(
-      (m) => `<tr>
-        <td>${esc(m.name)}</td>
-        <td>${m.shares}</td>
-        <td>${m.audited}</td>
-        <td>${m.conflictShares}</td>
-        <td>${m.unknownShares}</td>
-        <td>${pct(m.rate)}</td>
-      </tr>`
-    )
-    .join("");
-
-  const clRows = o.byClient
-    .map(
-      (c) => `<tr>
-        <td>${esc(c.name)}</td>
-        <td>${c.shares}</td>
-        <td>${c.audited}</td>
-        <td>${c.conflictShares}</td>
-        <td>${c.hardConflictShares}</td>
-        <td>${c.unknownShares}</td>
-        <td>${pct(c.rate)}</td>
-      </tr>`
-    )
-    .join("");
-
-  const audits = (state.audits || [])
+  const auditRows = (state.audits || [])
     .slice()
     .reverse()
     .map((a) => {
       const cl = state.clients.find((x) => x.id === a.clientId);
       const cand = state.candidates.find((x) => x.id === a.candidateId);
       const detail = (a.details || [])
-        .map((d) => `${esc(d.requirement || d.dimension)}${d.value ? " vs " + esc(d.value) : " (value not recorded)"}`)
+        .map((d) => `${esc(d.requirement || d.dimension)}${d.value ? " vs " + esc(d.value) : " (not recorded)"}`)
         .join("; ");
       const review =
         a.humanConfirmed === true
@@ -458,127 +553,57 @@ function renderMeasurement() {
       return `<tr>
         <td>${esc(cl ? cl.name : a.clientId)}</td>
         <td>${esc(cand ? cand.name : a.candidateId)}</td>
-        <td>${esc(a.classification.replace("_", " "))}</td>
+        <td>${esc(a.classification.replace(/_/g, " "))}</td>
         <td class="small">${esc(detail)}</td>
         <td>${review}</td>
       </tr>`;
     })
     .join("");
 
+  const ref = `
+    <h2>The funnel the assessment gave us</h2>
+    <div class="panel">
+      <table class="metrics">
+        <tr><th>Stage</th><th>Count</th><th>Step rate</th></tr>
+        <tr><td>Profiles shared</td><td>1,000</td><td>-</td></tr>
+        <tr><td>Profiles accepted</td><td>310</td><td>31.0%</td></tr>
+        <tr><td>Contact details shared</td><td>210</td><td>67.7%</td></tr>
+        <tr><td>Conversations started</td><td>150</td><td>71.4%</td></tr>
+        <tr><td>Meetings fixed</td><td>75</td><td>50.0%</td></tr>
+        <tr><td>Meetings completed</td><td>42</td><td>56.0%</td></tr>
+      </table>
+      <p class="note">Supplied figures from the assessment brief. About 35% of rejected profiles were reported to conflict with preferences already stated, and the denominator for that figure is not given. This is reference context, not this session's data.</p>
+    </div>`;
+
   $app.innerHTML = `
-    <h1>Measurement</h1>
-    <p class="lead">The operator view. The primary outcome is measured over every profile shared, and it is decided by an audit that does not depend on whether the matchmaker used the check. That is what stops the number improving because people stopped using the tool.</p>
+    <h1>How it's going</h1>
+    <p class="lead">For whoever is running the pilot. Every number comes from profiles that were actually sent, and every one of them is reviewed against the client's file as it was at the time.</p>
 
-    <h2>Primary outcome · criterion conflicts among all profiles shared</h2>
+    <h2>Since the check was introduced</h2>
+    <div class="panel">${currentBlock}</div>
+
+    <h2>Before the check was introduced</h2>
+    <div class="panel">${beforeBlock}</div>
+
     <div class="panel">
-      <table class="metrics">
-        <tr><th>Period</th><th>Shared</th><th>Audited</th><th>Conflicted</th><th>Hard</th><th>Soft</th><th>Unknown</th><th>Clean</th><th>Rate</th></tr>
-        ${periodRow("Baseline, before the window", w.baseline)}
-        ${periodRow("Baseline, control arm", w.baselineControl)}
-        ${periodRow("Measurement window, intervention", w.measurement)}
-        ${periodRow("Measurement window, control", w.measurementControl)}
-      </table>
-      <p class="note"><strong>Definition.</strong> The proportion of all profiles shared in the period that contain a conflict with a criterion the client had on file at the moment of sending. Numerator: profiles whose audit found a violated criterion. Denominator: every profile shared in the period, whether or not the check was opened. Classification: a <strong>hard</strong> conflict breaks a confirmed dealbreaker, a <strong>soft</strong> mismatch breaks a confirmed or stated preference, and <strong>unknown</strong> means a criterion could not be checked because the candidate's value is not recorded, which is never counted as clean.</p>
-      <p class="note"><strong>Window.</strong> The measurement window opened on ${esc(new Date(w.pilotStart).toISOString().slice(0, 10))}. Everything before it is baseline, audited by the same process, so the two are comparable.</p>
-      <p class="note"><strong>Audit.</strong> Every share is re-evaluated after the fact against the criteria that were in force at the time, by the same rules, whether or not the check was shown and whichever arm the client is on. A reviewer can confirm or dispute each audit, and the human-confirmed figure is reported separately. An automated audit can inherit the rule engine's mistakes, which is why the human step exists and why a real pilot would blind-re-code a sample.</p>
-      <p class="note"><strong>What this is not.</strong> These are synthetic numbers from a local prototype. They are a proposed pilot measurement, not a demonstrated effect on The Date Crew's business. No pilot has been run.</p>
+      <p class="note">These are descriptions of what happened, not proof that the check caused anything. A pilot would need a baseline measured the same way, the same review applied to both groups, and a blind human re-check of a sample, because the review and the audit use the same rules and can be wrong in the same way.</p>
     </div>
 
-    <h2>Adoption guardrail</h2>
-    <div class="panel">
-      <table class="metrics">
-        <tr><th>Arm</th><th>Eligible profiles shared</th><th>Checked before sending</th><th>Rate</th></tr>
-        <tr><td>Intervention</td><td>${o.adoption.intervention.eligible}</td><td>${o.adoption.intervention.checked}</td><td>${pct(o.adoption.intervention.rate)}</td></tr>
-        <tr><td>Control</td><td>${o.adoption.control.eligible}</td><td>${o.adoption.control.checked}</td><td>${pct(o.adoption.control.rate)}</td></tr>
-      </table>
-      <p class="note">The proportion of eligible profiles shared that had the check open before they went out. The control arm is zero by design, because the check is computed for it but never shown. A primary rate that falls while this falls is not a result, and the two are shown together so that is visible.</p>
-    </div>
-
-    <h2>Diagnostics</h2>
-    <div class="panel">
-      <table class="metrics">
-        <tr><th>Measure</th><th>Value</th><th>What it means</th></tr>
-        <tr><td>Confirmed dealbreaker conflicts reaching the client</td><td>${w.measurement.hardConflictShares}</td><td>Audit found the profile broke a confirmed no</td></tr>
-        <tr><td>Softer preference mismatches reaching the client</td><td>${w.measurement.softMismatchShares}</td><td>Broke a preference, confirmed or not, and broke no firm no. The two rows are disjoint and add up to the rate</td></tr>
-        <tr><td>Unknown coverage</td><td>${w.measurement.unknownShares} of ${w.measurement.audited} audited</td><td>Could not be checked because a value is not recorded</td></tr>
-        <tr><td>Overrides</td><td>${o.overrides.count} (${o.overrides.dealbreaker} firm, ${o.overrides.preference} preference, ${o.overrides.advisory} advisory)</td><td>A warning was on the card and the profile went anyway</td></tr>
-        <tr><td>Overrides with a stated reason</td><td>${o.overrides.withReason} of ${o.overrides.count}</td><td>Without a reason, an override cannot be reviewed</td></tr>
-      </table>
-      ${
-        o.overrides.detail.length
-          ? `<table class="metrics">
-              <tr><th>Client</th><th>Candidate</th><th>Level</th><th>Reason given</th></tr>
-              ${o.overrides.detail
-                .map(
-                  (x) => `<tr>
-                    <td>${esc((state.clients.find((c) => c.id === x.clientId) || {}).name || x.clientId)}</td>
-                    <td>${esc((state.candidates.find((c) => c.id === x.candidateId) || {}).name || x.candidateId)}</td>
-                    <td>${esc(x.level)}</td>
-                    <td>${x.reason ? esc(x.reason) : `<span class="muted">none given</span>`}</td>
-                  </tr>`
-                )
-                .join("")}
-            </table>`
-          : ""
-      }
-      <p class="note">Overrides are reported because a matchmaker who overrides every warning has a tool that is not working, and a tool that is not working should not be defended as a success. The reason is what makes them reviewable.</p>
-    </div>
-
-    <h2>By matchmaker</h2>
-    <div class="panel">
-      <table class="metrics">
-        <tr><th>Matchmaker</th><th>Shared</th><th>Audited</th><th>Conflicted</th><th>Unknown</th><th>Rate</th></tr>
-        ${mmRows || `<tr><td colspan="6" class="muted">No shares yet.</td></tr>`}
-      </table>
-      <p class="note">Read these as a per-matchmaker description, not as a comparison. Case mix and sourcing differ between matchmakers, and without controlling for them the 44% and 21% acceptance rates in the brief cannot be read as a difference in skill. Small numbers are not evidence either way.</p>
-    </div>
-
-    <h2>By client</h2>
-    <div class="panel">
-      <table class="metrics">
-        <tr><th>Client</th><th>Shared</th><th>Audited</th><th>Conflicted</th><th>Hard</th><th>Unknown</th><th>Rate</th></tr>
-        ${clRows || `<tr><td colspan="7" class="muted">No shares yet.</td></tr>`}
-      </table>
-    </div>
-
-    <h2>Audit</h2>
-    <div class="panel">
-      <table class="metrics">
-        <tr><th>Client</th><th>Candidate</th><th>Audit says</th><th>Criterion against candidate value</th><th>Review</th></tr>
-        ${audits || `<tr><td colspan="5" class="muted">No shares audited yet.</td></tr>`}
-      </table>
-      <p class="note">One row per profile shared, including the ones with nothing against them, so the denominator is visible and not just the interesting cases.</p>
-    </div>
-
-    <h2>Session counts</h2>
-    <div class="metric-grid">
-      <div class="metric-card"><div class="metric-value">${s.shares}</div><div class="metric-label">Shares</div></div>
-      <div class="metric-card"><div class="metric-value">${s.cardViews}</div><div class="metric-label">Cards opened</div></div>
-      <div class="metric-card"><div class="metric-value">${s.audits}</div><div class="metric-label">Audits</div></div>
-      <div class="metric-card"><div class="metric-value">${s.codedRejections}</div><div class="metric-label">Coded rejections</div></div>
-      <div class="metric-card"><div class="metric-value">${s.uncodedRejections}</div><div class="metric-label">Uncoded rejections</div></div>
-      <div class="metric-card"><div class="metric-value">${s.acceptances}</div><div class="metric-label">Acceptances</div></div>
-      <div class="metric-card"><div class="metric-value">${s.insights}</div><div class="metric-label">Acceptance insights</div></div>
-      <div class="metric-card"><div class="metric-value">${s.confirmations}</div><div class="metric-label">Client confirmations</div></div>
-    </div>
-
-    <h2>Diagnostic · historical conflict rate</h2>
-    <div class="panel"><div class="muted small">Coded rejections whose reason was already in the client's recorded preferences at rejection time. This is the post-hoc version of the brief's 35% figure, and its denominator is the rejections, not the shares. It is a diagnostic, not the primary outcome.</div></div>
-
-    <h2>Diagnostic · repeat-conflict rate (recurrence)</h2>
-    <div class="panel">
+    <details class="panel history">
+      <summary>Details for the pilot operator</summary>
+      <h3>By client</h3>
       <table class="metrics">
         <tr><th>Client</th><th>Historical (coded)</th><th>Conflicts</th><th>ARCR eligible / repeat</th><th>ARCR sub-rates</th><th>ARCR</th></tr>
-        ${clientRows}
+        ${rows}
       </table>
       <p class="note">ARCR measures recurrence, not avoidability. Sub-rates split the numerator by the evidence available at share time: hard (a confirmed dealbreaker existed), settled (a confirmed preference, so the card is silent), contradiction (a prior rejection then a later acceptance), plain (a prior rejection only). Synthetic, illustrative data.</p>
-    </div>
-
-    <h2>Learning loop · acceptance insight consultation</h2>
-    <div class="panel">
-      <div class="metric-value">${s.insightConsultation.consulted} / ${s.insightConsultation.eligible}${s.insightConsultation.rate == null ? " · no opportunity yet" : ` = ${Math.round(s.insightConsultation.rate * 100)}%`}</div>
-      <p class="note">Of the acceptance insights that had a subsequent recommendation to inform, how many were explicitly consulted.${s.insightConsultation.noOpportunity ? ` ${s.insightConsultation.noOpportunity} insight${s.insightConsultation.noOpportunity === 1 ? "" : "s"} with no subsequent recommendation yet ${s.insightConsultation.noOpportunity === 1 ? "is" : "are"} not counted as unconsulted.` : ""} This measures whether the learning loop is used, not whether it improves matching.</p>
-    </div>
+      <h3>Every profile reviewed</h3>
+      <table class="metrics">
+        <tr><th>Client</th><th>Candidate</th><th>Review says</th><th>Criterion against candidate value</th><th>Review</th></tr>
+        ${auditRows || `<tr><td colspan="5" class="muted">Nothing reviewed yet.</td></tr>`}
+      </table>
+      <p class="note">One row per profile sent, including the ones with nothing against them, so the denominator is visible and not just the interesting cases.</p>
+    </details>
 
     ${ref}`;
 }
@@ -654,44 +679,59 @@ function criterionEvidence(criterion) {
   return html;
 }
 
+// The acceptance debrief is a separate feature, not part of the check, so it
+// stays out of the way until the matchmaker wants it. Opening it is what counts
+// as having consulted it.
 function insightsStrip(insights) {
   const list = insights || [];
   if (!list.length) return "";
   const items = list
     .map(
       (i) => `
-      <label class="insight-check">
-        <input type="checkbox" class="consult-check" data-insight="${esc(i.id)}" />
-        <span class="insight-body">
-          <span class="pos-source">accepted ${esc(i.candidateName)}</span>
-          ${i.dimensions.length ? i.dimensions.map((d) => `<span class="tag">${esc(dimLabel(d))}</span>`).join("") : `<span class="tag muted">no dimensions</span>`}
-          ${i.surprise ? `<span class="q">“${esc(i.surprise)}”</span>` : ""}
-        </span>
-      </label>`
+      <div class="insight-row">
+        <span class="pos-source">accepted ${esc(i.candidateName)}</span>
+        ${i.dimensions.length ? i.dimensions.map((d) => `<span class="tag">${esc(dimLabel(d))}</span>`).join("") : `<span class="tag muted">nothing recorded</span>`}
+        ${i.surprise ? `<span class="q">“${esc(i.surprise)}”</span>` : ""}
+      </div>`
     )
     .join("");
-  return `<div class="evidence-strip insights">
-    <span class="strip-label">Acceptance insights</span>
-    <span class="muted small">Tick the ones that informed this recommendation.</span>
+  return `<details class="also insights">
+    <summary>What they liked before (${list.length})</summary>
+    <p class="muted small">From the acceptance debrief. Opening this counts as consulting it.</p>
     ${items}
-  </div>`;
+  </details>`;
 }
 
-async function openSend(clientId, cand, reviewOverride) {
-  const rv = reviewOverride || cand.review;
+async function openSend(clientId, cand, reviewOverride, skipView) {
   const cl = client(clientId);
+  let rv = reviewOverride || cand.review;
+  if (!rv) {
+    // The card is coming back after a clarification, so the review is worked out
+    // again against the file as it now stands.
+    const res = await fetch(
+      `/api/check?clientId=${encodeURIComponent(clientId)}&candidateId=${encodeURIComponent(cand.id)}`
+    );
+    if (!res.ok) {
+      showToast("That check could not run.");
+      return;
+    }
+    rv = await res.json();
+  }
 
   // The card was opened, so the matchmaker looked at whatever it had to say.
   // This is the evidence the adoption guardrail is built on, so it is recorded
   // before anything can be sent.
-  await action("record_card_view", {
-    clientId,
-    candidateId: cand.id,
-    surfaced: rv.surface !== false,
-  });
+  if (!skipView) {
+    await action("record_card_view", {
+      clientId,
+      candidateId: cand.id,
+      surfaced: rv.surface !== false,
+    });
+  }
 
-  // Control-arm clients never see ledger evidence. The review is still computed
-  // server-side for measurement, but the matchmaker gets a plain confirmation.
+  // Control-group clients never see the check. It is still worked out for them,
+  // so the two groups can be compared, but the matchmaker gets a plain
+  // confirmation.
   if (rv.surface === false) {
     openModal(`
       <h2>Send profile · ${esc(cand.name)} → ${esc(cl.name)}</h2>
@@ -701,141 +741,185 @@ async function openSend(clientId, cand, reviewOverride) {
         <button class="btn secondary" data-close>Hold</button>
       </div>`);
     const root = $modal.querySelector(".modal");
-    root.querySelector("[data-proceed]").addEventListener("click", () => sendAndResolve(clientId, cand.id, "proceed", "Send (control)"));
+    root.querySelector("[data-proceed]").addEventListener("click", () =>
+      sendAndResolve(clientId, cand.id, "proceed", "Send (no check shown)", [])
+    );
     root.querySelector("[data-close]").addEventListener("click", closeModal);
     return;
   }
 
-  const positiveHtml = positiveStrip(rv);
-  const insightsHtml = insightsStrip(cl.insights);
-  let body = "";
-  let actions = "";
+  // A profile already sent to this client, with no answer yet, is the same
+  // introduction. The card says so rather than offering to send it again.
+  const alreadySent = (cl.sent || []).some(
+    (s) => s.candidateId === cand.id && s.outcome === "pending"
+  );
 
-  if (rv.state === "clean") {
-    body = `<div class="card-state clean"><h3>No conflict</h3><div class="evidence">No recorded history conflicts with this candidate.</div></div>`;
-    actions = `<button class="btn" data-proceed>Send profile</button><button class="btn secondary" data-close>Hold</button>`;
-  } else if (rv.state === "untagged") {
-    body = `<div class="card-state untagged"><h3>Untagged candidate</h3><div class="evidence">This candidate has no dimension tags, so no comparison can be made. Untagged is not the same as compatible.</div></div>`;
-    actions = `<button class="btn" data-proceed>Send anyway</button><button class="btn secondary" data-close>Hold</button>`;
-  } else if (rv.state === "no_history") {
-    body = `<div class="card-state no_history"><h3>No feedback yet</h3><div class="evidence">This client has no recorded preferences or rejections, so there is nothing to check against yet.</div></div>`;
-    actions = `<button class="btn" data-proceed>Send anyway</button><button class="btn secondary" data-close>Hold</button>`;
-  } else if (rv.state === "uncoded_only") {
-    body = `<div class="card-state no_history"><h3>History present but uncoded</h3><div class="evidence">This client has rejection feedback, but none of it is coded yet. That is not the same as no conflict.</div></div>`;
-    actions = `<button class="btn" data-proceed>Send anyway</button><button class="btn secondary" data-close>Hold</button>`;
-  } else {
-    const finding = rv.findings[0];
-    const dim = dimLabel(finding.dimension);
-    const clientRec = client(clientId);
-    const others = rv.findings.slice(1);
-    const alsoHtml = others.length
-      ? `<div class="also-flagged"><div class="also-label">Also flagged</div>${others.map((f) => `<div>${findingLine(f)}</div>`).join("")}</div>`
-      : "";
-    const critHtml = criterionEvidence(finding.criterion);
-    const overrideField = `
-      <div class="field">
-        <label for="override-reason">Why are you sending this anyway?</label>
-        <input id="override-reason" type="text" placeholder="Optional, but it is what makes the override reviewable" />
-        <div class="muted small">Recorded with the override, and reported back in the measurement view.</div>
+  const findings = rv.findings || [];
+  const actionable = findings.filter((f) => f.type !== "incomplete");
+  const rest = findings.filter((f) => f.type === "incomplete");
+  const first = actionable[0] || rest[0] || null;
+  const others = findings.filter((f) => f !== first);
+  const isFirm = first && first.type === "conflict";
+
+  const findingBlock = (f) => {
+    if (!f) return "";
+    const crit = f.criterion;
+    const kind =
+      f.type === "conflict"
+        ? "Dealbreaker"
+        : f.type === "preference_mismatch"
+          ? f.basis === "confirmed_preference"
+            ? "Preference mismatch"
+            : "Preference mismatch, not confirmed"
+          : f.type === "contradiction"
+            ? "Their file disagrees with itself"
+            : f.type === "repeat"
+              ? "You have rejected on this before"
+              : "Missing information";
+    const source = crit
+      ? `<span>${esc(f.tierLabel || "From the onboarding call")}</span>`
+      : `<span>A decision they made, not a rule</span>`;
+    const valueLine =
+      f.value === null || f.value === undefined
+        ? `<span>Nothing recorded on the profile for ${esc(dimNoun(f.dimension))}</span>`
+        : `<span>The profile lists: ${esc(f.value)}</span>`;
+    return `<div class="finding">
+        <div class="finding-kind">${esc(kind)}</div>
+        <p class="finding-sentence">${esc(f.sentence || "")}</p>
+        ${crit && crit.note ? `<p class="finding-words">The client said: “${esc(crit.note)}”</p>` : ""}
+        <div class="finding-source">${source}${valueLine}</div>
       </div>`;
-    if (rv.state === "conflict") {
-      body = `
-        <div class="card-state conflict"><h3>Conflict · ${esc(dim)}</h3></div>
-        <div class="evidence">
-          <p>${findingLine(finding)}</p>
-          ${critHtml}
-          <p>The comparison is on the value and in the direction the client set, not on the category.</p>
-        </div>${alsoHtml}`;
-      actions = `<button class="btn secondary" data-proceed>Send anyway</button><button class="btn" data-hold>Hold</button>`;
-    } else if (rv.state === "contradiction") {
-      const row = (clientRec.ledger.rows || []).find((r) => r.dimension === finding.dimension);
-      const acc = (clientRec.acceptances || []).find((a) => {
-        const ds = a.dimension
-          ? [a.dimension]
-          : candidate(a.candidateId)
-            ? candidate(a.candidateId).dimensions
-            : [];
-        return ds.includes(finding.dimension);
-      });
-      body = `
-        <div class="card-state contradiction"><h3>Contradiction · ${esc(dim)}</h3></div>
-        <div class="evidence">
-          <p>${findingLine(finding)}</p>
-          <p>This client <strong>rejected ${row ? row.rejectedCount : "this dimension"} profiles</strong> on ${esc(dim)}, then <strong>accepted ${row ? row.acceptedCount : "one"} later</strong>.</p>
-          <div class="compare">
-            <div class="side rejected">
-              <div class="side-label">Rejected earlier</div>
-              <div class="candidate-name">${esc(candidate(row.earliestRejection.candidateId).name)}</div>
-              <div class="q">“${esc(row.earliestRejection.freeText)}”</div>
-            </div>
-            <div class="side accepted">
-              <div class="side-label">Accepted later</div>
-              <div class="candidate-name">${acc ? esc(acc.candidateName) : "a profile on this dimension"}</div>
-              <div class="muted small">${acc ? relTime(acc.acceptedAt) : ""}</div>
-            </div>
-          </div>
-          <p class="q">“You rejected these for ${esc(dim)} and later accepted one with it. Is it a dealbreaker, or a preference?”</p>
-        </div>${alsoHtml}`;
-      actions = `<button class="btn" data-ask>Ask the client</button><button class="btn secondary" data-proceed>Send anyway</button><button class="btn ghost" data-hold>Hold</button>`;
-    } else if (rv.state === "preference_mismatch") {
-      body = `
-        <div class="card-state repeat"><h3>Preference mismatch · ${esc(dim)}</h3></div>
-        <div class="evidence">
-          <p>${findingLine(finding)}</p>
-          ${critHtml}
-          <p>${finding.basis === "stated_preference" ? "This is a stated preference rather than a confirmed one, so it is advice and not a warning." : "The client confirmed this preference, but it is a criterion they hold rather than a no."} It does not block a send.</p>
-        </div>${alsoHtml}`;
-      actions = `<button class="btn" data-proceed>Send anyway</button><button class="btn secondary" data-ask>Ask the client</button><button class="btn ghost" data-hold>Hold</button>`;
-    } else if (rv.state === "incomplete") {
-      body = `
-        <div class="card-state no_history"><h3>Information missing · ${esc(dim)}</h3></div>
-        <div class="evidence">
-          <p>${findingLine(finding)}</p>
-          ${critHtml}
-          <p>Unknown is not the same as compatible, so it is worth a moment before sending.</p>
-        </div>${alsoHtml}`;
-      actions = `<button class="btn" data-proceed>Send anyway</button><button class="btn secondary" data-close>Hold</button>`;
-    } else {
-      // repeat
-      body = `
-        <div class="card-state repeat"><h3>Prior rejection · ${esc(dim)}</h3></div>
-        <div class="evidence">
-          <p>${findingLine(finding)}</p>
-          <p>This is an unconfirmed pattern, not a confirmed dealbreaker. It does not block a send.</p>
-        </div>${alsoHtml}`;
-      actions = `<button class="btn" data-proceed>Send anyway</button><button class="btn secondary" data-ask>Ask the client</button><button class="btn ghost" data-hold>Hold</button>`;
-    }
-    // Any card that shows a warning can be overridden, so any of them can
-    // carry a reason. A reason is what makes the override reviewable later.
-    body += overrideField;
-  }
+  };
+
+  const headline = !findings.length
+    ? "Nothing to check"
+    : actionable.length === 1
+      ? "One thing to check"
+      : `${actionable.length} things to check`;
+
+  const nothingToCheck = !findings.length
+    ? rv.state === "no_criteria"
+      ? `<div class="card-state clean">
+          <h3>Nothing to compare against</h3>
+          <p>There is nothing on this client's file that a profile can be checked against. The only thing recorded is a pattern, and a pattern is a question for the client, not a rule.</p>
+        </div>`
+      : `<div class="card-state clean">
+        <h3>No conflicts found in the information available</h3>
+        <p>Nothing this client has told us conflicts with what is recorded about this profile. Mutual compatibility, not just profile alignment: treat this as nothing standing in the way rather than as a good match.</p>
+      </div>`
+    : findingBlock(first);
+
+  const alsoHtml = others.length
+    ? `<details class="also"><summary>Also worth knowing (${others.length})</summary>${others.map(findingBlock).join("")}</details>`
+    : "";
+
+  // An observation is a pattern the matchmaker noticed. It is shown as
+  // context, it never rules a profile out, and it comes with the question to
+  // put to the client.
+  const observations = rv.observations || [];
+  const observationsHtml = observations.length
+    ? `<div class="observations">
+        <div class="obs-head">Worth checking with the client</div>
+        ${observations
+          .map(
+            (o) => `<div class="obs-item">
+              <p>${esc(criterionText(o))}.</p>
+              ${o.note ? `<p class="obs-note">What you noticed: “${esc(o.note)}”</p>` : ""}
+              <p class="obs-line">This is a pattern, not something the client has said. It has not ruled this profile out.</p>
+              <button class="btn secondary" data-ask-obs="${esc(o.dimension)}">Ask the client about this</button>
+            </div>`
+          )
+          .join("")}
+      </div>`
+    : "";
+
+  const positiveHtml = (rv.positive || []).length
+    ? `<div class="evidence-strip">
+        <span class="strip-label">In their favour</span>
+        ${rv.positive
+          .map((p) =>
+            p.source === "criterion"
+              ? `<span class="pos-item">${esc(p.detail || dimLabel(p.dimension))}</span>`
+              : `<span class="pos-item">They accepted ${esc(p.detail || "someone")} before${p.value ? `, who is ${esc(p.value)}` : ""} on ${esc(dimLabel(p.dimension).toLowerCase())}</span>`
+          )
+          .join("")}
+      </div>`
+    : "";
+
+  const insightsHtml = insightsStrip(cl.insights);
+  let consulted = [];
 
   openModal(`
-    <h2>Send review · ${esc(cand.name)} → ${esc(cl.name)}</h2>
-    ${body}
+    <h2>Check before sharing · ${esc(cand.name)} → ${esc(cl.name)}</h2>
+    <div class="card-state ${isFirm ? "conflict" : actionable.length ? "warn" : "clean"}">
+      <h3>${esc(headline)}</h3>
+    </div>
+    ${nothingToCheck}
+    ${alsoHtml}
+    ${observationsHtml}
     ${positiveHtml}
     ${insightsHtml}
-    <div class="modal-actions">${actions}</div>`);
-
-  const send = () => {
-    const consulted = [...$modal.querySelectorAll(".consult-check:checked")].map((el) => el.getAttribute("data-insight"));
-    const reasonEl = $modal.querySelector("#override-reason");
-    const reason = reasonEl ? reasonEl.value.trim() : "";
-    const rationale = reason
-      ? reason
-      : rv.state === "conflict"
-        ? "Sent anyway, no reason given"
-        : "Send reviewed";
-    sendAndResolve(clientId, cand.id, "proceed", rationale, consulted);
-  };
-  const ask = () => openAnswer(clientId, cand, rv.findings[0] ? rv.findings[0].dimension : null);
-  const hold = () => holdSend(clientId, cand.id);
+    <div class="modal-actions">
+      <button class="btn secondary" data-hold>Hold the profile</button>
+      ${first && first.type !== "incomplete" ? `<button class="btn" data-ask>Ask the client</button>` : ""}
+      ${
+        alreadySent
+          ? `<span class="muted small">Already sent to ${esc(cl.name)}, waiting on their answer.</span>`
+          : `<button class="btn" data-proceed>${isFirm ? "Share anyway" : "Share this profile"}</button>`
+      }
+    </div>
+    <div class="field reason-field" id="reason-field" hidden>
+      <label for="override-reason">Why are you sharing it anyway?</label>
+      <input id="override-reason" type="text" placeholder="A line is enough, and it is what makes this reviewable later" autocomplete="off" />
+      <div class="muted small" id="reason-error" hidden>Add a reason so this can be reviewed later.</div>
+    </div>`);
 
   const root = $modal.querySelector(".modal");
-  root.querySelector("[data-proceed]") && root.querySelector("[data-proceed]").addEventListener("click", send);
-  root.querySelector("[data-ask]") && root.querySelector("[data-ask]").addEventListener("click", ask);
-  root.querySelector("[data-hold]") && root.querySelector("[data-hold]").addEventListener("click", hold);
-  root.querySelector("[data-close]") && root.querySelector("[data-close]").addEventListener("click", closeModal);
+  const insightsDetails = root.querySelector("details.insights");
+  if (insightsDetails) {
+    insightsDetails.addEventListener("toggle", () => {
+      if (insightsDetails.open) {
+        consulted = (cl.insights || []).map((i) => i.id);
+      }
+    });
+  }
+  const reasonField = root.querySelector("#reason-field");
+  const reasonInput = root.querySelector("#override-reason");
+  const reasonError = root.querySelector("#reason-error");
+  const proceedBtn = root.querySelector("[data-proceed]");
+
+  const send = () => {
+    const reason = reasonInput ? reasonInput.value.trim() : "";
+    if (isFirm && !reason) {
+      // A firm no gets a reason. Anything less does not earn that friction.
+      reasonField.hidden = false;
+      reasonError.hidden = false;
+      reasonInput.focus();
+      proceedBtn.textContent = "Confirm and share";
+      return;
+    }
+    sendAndResolve(
+      clientId,
+      cand.id,
+      "proceed",
+      reason || (first ? "Sent after review" : "Sent"),
+      consulted
+    );
+  };
+
+  const ask = () =>
+    openAnswer(clientId, cand, first && first.criterion ? first.dimension : first ? first.dimension : null);
+  root.querySelectorAll("[data-ask-obs]").forEach((btn) =>
+    btn.addEventListener("click", () =>
+      openAnswer(clientId, cand, btn.getAttribute("data-ask-obs"))
+    )
+  );
+  const hold = () => holdSend(clientId, cand.id);
+
+  proceedBtn.addEventListener("click", send);
+  const askBtn = root.querySelector("[data-ask]");
+  if (askBtn) askBtn.addEventListener("click", ask);
+  root.querySelector("[data-hold]").addEventListener("click", hold);
 }
 
 async function sendAndResolve(clientId, candidateId, actionName, rationale, consultedInsightIds) {
@@ -861,131 +945,301 @@ async function holdSend(clientId, candidateId) {
   render();
 }
 
+// Asking the client. This records what they actually said, including when
+// what they said has changed: a different value, a different direction, or a
+// different level of firmness. The old version is kept with the date it was in
+// force, so the change is traceable.
 function openAnswer(clientId, cand, dimension) {
+  const cl = client(clientId);
   const values = dimensionValues(dimension);
-  // The value the client last accepted on this dimension, and the value they
-  // last rejected. These are the two a rule is most likely to be about.
-  const clientRec = client(clientId);
-  const acceptedValue = (clientRec.acceptances || [])
-    .filter((a) => a.dimension === dimension)
-    .sort((a, b) => new Date(b.acceptedAt) - new Date(a.acceptedAt))[0];
-  const rejectedValue = (clientRec.rejections || [])
+  const existing = (cl.preferences || []).find((p) => p.dimension === dimension);
+  const rejected = (cl.rejections || [])
     .filter((r) => r.dimension === dimension)
     .sort((a, b) => new Date(b.recordedAt) - new Date(a.recordedAt))[0];
+  const accepted = (cl.acceptances || [])
+    .filter((a) => a.dimension === dimension)
+    .sort((a, b) => new Date(b.acceptedAt) - new Date(a.acceptedAt))[0];
+
+  // A sensible starting point: what the client last accepted, or what they
+  // last rejected, or what is on file now.
+  let chosen = existing ? existing.values.slice() : [];
+  if (!chosen.length && accepted && accepted.value) chosen = [accepted.value];
+  if (!chosen.length && rejected && rejected.value) chosen = [rejected.value];
+  let direction = existing ? existing.operator : "must_not_be";
+  let firmness = existing ? existing.kind : "confirmed_dealbreaker";
+
+  const dimensionInfo = (state.dimensions || []).find((d) => d.key === dimension);
+  const question = dimensionInfo && dimensionInfo.question
+    ? dimensionInfo.question
+    : `What would ${cl.name} consider for ${dimLabel(dimension).toLowerCase()}?`;
+  const noun = dimLabel(dimension).toLowerCase();
+
+  // What the client has done before, kept apart from what they have said.
+  // These are decisions, and they are not proof of a preference.
+  const decisions = [];
+  for (const a of cl.acceptances || []) {
+    if (a.dimension !== dimension) continue;
+    decisions.push({ kind: "accepted", name: a.candidateName, value: a.value, at: a.acceptedAt });
+  }
+  for (const r of cl.rejections || []) {
+    if (r.dimension !== dimension) continue;
+    decisions.push({
+      kind: "rejected",
+      name: (candidate(r.candidateId) || {}).name,
+      value: r.value,
+      at: r.recordedAt,
+    });
+  }
+  decisions.sort((x, y) => new Date(y.at) - new Date(x.at));
+  const decisionsHtml = decisions.length
+    ? `<div class="field">
+        <label>Previous decisions</label>
+        ${decisions
+          .map(
+            (d) =>
+              `<div class="muted small">${d.kind === "accepted" ? "Accepted" : "Turned down"} ${esc(d.name || "")}${d.value ? `, ${esc(d.value)}` : ""} · ${esc(relTime(d.at))}</div>`
+          )
+          .join("")}
+        <div class="muted small">These are what happened. They do not establish what ${esc(cl.name)} wants, and they are not checked against a profile on their own.</div>
+      </div>`
+    : "";
 
   openModal(`
-    <h2>Ask the client · ${esc(dimLabel(dimension))}</h2>
-    <div class="evidence">
-      <p class="q">“You rejected profiles for ${esc(dimLabel(dimension))} and later accepted one with it. Is it a dealbreaker, or a preference?”</p>
-      <p class="muted small">Recording the client's answer settles this dimension. Only the client's answer writes a rule, and only with a value and the client's own words.</p>
-    </div>
+    <h2 id="ans-title">Clarify ${esc(cl.name)}'s ${esc(noun)} preference</h2>
     <div class="field">
-      <label>Which value is this about?</label>
-      <select id="answer-value">
-        ${values.map((v) => `<option value="${esc(v)}">${esc(v)}</option>`).join("")}
+      <label for="ans-dim">What is this about</label>
+      <select id="ans-dim">
+        ${(state.dimensions || [])
+          .map(
+            (d) =>
+              `<option value="${esc(d.key)}"${d.key === dimension ? " selected" : ""}>${esc(d.label)}</option>`
+          )
+          .join("")}
       </select>
-      <div class="muted small">
-        ${acceptedValue ? `Accepted on ${esc(acceptedValue.value || acceptedValue.dimension)}.` : "No earlier acceptance recorded."}
-        ${rejectedValue && rejectedValue.value ? ` Last rejected on ${esc(rejectedValue.value)}.` : ""}
-      </div>
     </div>
     <div class="field">
-      <label>What did the client say, in their words? <span class="muted small">(required to settle a rule)</span></label>
-      <textarea id="verbatim" placeholder="e.g. Location is a preference, not a dealbreaker, as long as they're settled about it"></textarea>
+      <label id="ans-question">${esc(question)}</label>
     </div>
+    <div class="field">
+      <label>Which direction</label>
+      <select id="ans-op">
+        <option value="must_not_be">The partner must not be ...</option>
+        <option value="must_be">The partner must be ...</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Which values</label>
+      <div class="dim-picker" id="ans-values"></div>
+      <div class="muted small" id="ans-hint"></div>
+    </div>
+    <div class="field">
+      <label>How firm is it</label>
+      <div class="severity-row severity-column">
+        <label><input type="radio" name="kind" value="confirmed_preference" checked /> A preference, not a no</label>
+        <label><input type="radio" name="kind" value="confirmed_dealbreaker" /> A definite no</label>
+        <label><input type="radio" name="kind" value="stated_preference" /> Still not sure, so just advice</label>
+      </div>
+      <div class="muted small" id="ans-kind-hint"></div>
+    </div>
+    <div class="field">
+      <label>Their own words</label>
+      <textarea id="verbatim" placeholder="e.g. Location is a preference, not a dealbreaker"></textarea>
+    </div>
+    ${decisionsHtml}
+    <div class="form-error" role="alert" hidden></div>
     <div class="modal-actions">
-      <button class="btn" data-ans="preference" data-value="${acceptedValue ? esc(acceptedValue.value || "") : ""}">Preference</button>
-      <button class="btn" data-ans="dealbreaker" data-value="${rejectedValue && rejectedValue.value ? esc(rejectedValue.value) : ""}">Dealbreaker</button>
-      <button class="btn ghost" data-ans="uncertain">Not sure</button>
+      <button class="btn secondary" type="button" data-close>Cancel</button>
+      <button class="btn" type="button" id="ans-save">Save what they said</button>
     </div>`);
 
   const root = $modal.querySelector(".modal");
-  const verbatimEl = root.querySelector("#verbatim");
-  const valueEl = root.querySelector("#answer-value");
-  root.querySelectorAll("[data-ans]").forEach((btn) =>
-    btn.addEventListener("click", async () => {
-      const answer = btn.getAttribute("data-ans");
-      const suggested = btn.getAttribute("data-value");
-      if (suggested && valueEl) valueEl.value = suggested;
-      const res = await action("record_client_answer", {
-        clientId,
-        dimension,
-        answer,
-        value: valueEl ? valueEl.value : null,
-        verbatim: verbatimEl.value,
-      });
-      if (!res.ok) {
-        showToast(res.message);
-        return;
-      }
-      if (answer === "dealbreaker") {
-        await action("resolve", { clientId, candidateId: cand.id, action: "hold", rationale: "Client confirmed this is a dealbreaker" });
-      } else if (answer === "preference") {
-        await action("share", { clientId, candidateId: cand.id });
-        await action("resolve", { clientId, candidateId: cand.id, action: "resolve", rationale: "Client settled the dimension: preference" });
-      } else {
-        // Not sure: hold, do not share, do not write a rule.
-        await action("resolve", { clientId, candidateId: cand.id, action: "hold", rationale: "Client was not sure; held for follow-up" });
-      }
-      closeModal();
-      if (answer === "uncertain") {
-        showToast("Noted. No rule written, and nothing was sent. Follow up with the client.");
-      } else {
-        showToast("The client's answer is recorded, and the rule is written from their words.");
-      }
-      render();
-    })
-  );
+  const opSel = root.querySelector("#ans-op");
+  const picker = root.querySelector("#ans-values");
+  const hint = root.querySelector("#ans-hint");
+  const kindHint = root.querySelector("#ans-kind-hint");
+  const dimSel = root.querySelector("#ans-dim");
+  const questionEl = root.querySelector("#ans-question");
+  const titleEl = root.querySelector("#ans-title");
+  // The values and the question follow the dimension, so the matchmaker can
+  // put any of it to the client.
+  let currentDimension = dimension;
+  const valuesFor = (key) => dimensionValues(key);
+  dimSel.addEventListener("change", () => {
+    currentDimension = dimSel.value;
+    chosen = [];
+    const info = (state.dimensions || []).find((d) => d.key === currentDimension);
+    questionEl.textContent = info && info.question ? info.question : "";
+    if (info && titleEl) {
+      titleEl.innerHTML = `Clarify ${esc(cl.name)}'s ${esc(info.label.toLowerCase())} preference`;
+    }
+    renderValues();
+  });
+  const kindEls = [...root.querySelectorAll('input[name="kind"]')];
+  function renderKindHint() {
+    const kind = (kindEls.find((el) => el.checked) || {}).value;
+    kindHint.textContent =
+      kind === "confirmed_dealbreaker"
+        ? "A definite no. Every profile is checked against it, and one that breaks it is a conflict."
+        : kind === "confirmed_preference"
+          ? "A preference. Every profile is checked against it, and one that misses it is a mismatch, not a conflict."
+          : "Still advice. It is recorded, and nothing is ruled out on it until the client confirms.";
+  }
+  kindEls.forEach((el) => el.addEventListener("change", renderKindHint));
+  renderKindHint();
+
+  opSel.value = direction;
+  kindEls.forEach((el) => {
+    if (el.value === firmness) el.checked = true;
+  });
+
+  function renderValues() {
+    const values = valuesFor(currentDimension);
+    picker.innerHTML = values
+      .map(
+        (v) =>
+          `<span class="dim-chip${chosen.indexOf(v) !== -1 ? " selected" : ""}" data-val="${esc(v)}">${esc(v)}</span>`
+      )
+      .join("");
+    picker.querySelectorAll(".dim-chip").forEach((chip) =>
+      chip.addEventListener("click", () => {
+        const v = chip.getAttribute("data-val");
+        const at = chosen.indexOf(v);
+        if (at === -1) chosen.push(v);
+        else chosen.splice(at, 1);
+        renderValues();
+      })
+    );
+    const dir = opSel.value === "must_not_be" ? "must not be" : "must be";
+    hint.textContent = chosen.length
+      ? `The partner ${dir} ${chosen.join(" or ")}.`
+      : "Pick at least one value.";
+  }
+  opSel.addEventListener("change", renderValues);
+  renderValues();
+
+  root.querySelector("[data-close]").addEventListener("click", closeModal);
+  root.querySelector("#ans-save").addEventListener("click", async () => {
+    const verbatim = root.querySelector("#verbatim").value;
+    const kind = (kindEls.find((el) => el.checked) || {}).value || "confirmed_preference";
+    if (!chosen.length) {
+      showFormError(root, "Pick at least one value for the criterion.");
+      return;
+    }
+    if (!verbatim.trim()) {
+      showFormError(root, "Write what the client said in their own words. A rule is not written without it.");
+      return;
+    }
+    const res = await action("record_client_answer", {
+      clientId,
+      dimension: currentDimension,
+      answer: kind === "confirmed_dealbreaker" ? "dealbreaker" : "preference",
+      operator: opSel.value,
+      values: chosen,
+      kind,
+      verbatim,
+    });
+    if (!res.ok) {
+      showFormError(root, res.message);
+      return;
+    }
+    closeModal();
+    showToast("Recorded. Their file now says what they just said, and the old version is kept.");
+    render();
+    // The card comes back with the updated file, so the matchmaker decides
+    // again with the new criterion in place.
+    await openSend(clientId, cand, null, true);
+  });
 }
 
+// Capturing a rejection. The choices offered are the ones that matter for this
+// client and this candidate, not the whole vocabulary. The full list is still
+// there, one step away, for the case that needs it.
 function openReject(clientId, cand) {
-  const dims = state.dimensions;
+  const cl = client(clientId);
+  const dims = state.dimensions || [];
   const openedAt = Date.now();
+
+  const clientDims = new Set();
+  for (const p of cl.preferences || []) clientDims.add(p.dimension);
+  for (const r of cl.rejections || []) if (r.dimension) clientDims.add(r.dimension);
+
+  const relevant = dims.filter((d) => clientDims.has(d.key));
+  const others = dims.filter((d) => !clientDims.has(d.key));
+
+  const chip = (d) => {
+    const value = valueOf(cand, d.key);
+    return `<span class="dim-chip${value ? " with-value" : ""}" data-dim="${esc(d.key)}">${esc(d.label)}${value ? ` <span class="chip-value">${esc(value)}</span>` : ""}</span>`;
+  };
+
   openModal(`
-    <h2>Reject · ${esc(cand.name)}</h2>
+    <h2>What did they say no to · ${esc(cand.name)}</h2>
+    <p class="muted small">The first conversation is about identity, the rejection conversation is about reality. Start from what is relevant to ${esc(cl.name)}. You can pick something else if it is not here.</p>
     <div class="field">
-      <label>What did the client reject on?</label>
-      <div class="dim-picker" id="dim-picker">
-        ${dims
-          .map((d) => `<span class="dim-chip" data-dim="${d.key}" title="${esc(d.hint)}">${esc(d.label)}</span>`)
-          .join("")}
-      </div>
-      <div class="suggest-line" id="suggest-line"></div>
+      <label>What was it about</label>
+      <div class="dim-picker" id="dim-picker">${relevant.map(chip).join("")}</div>
+      <details class="also"><summary id="other-label">Something else</summary>
+        <div class="dim-picker" id="other-picker">${others.map(chip).join("")}</div>
+      </details>
+      <div class="muted small" id="suggest-line"></div>
     </div>
     <div class="field">
-      <label>Severity</label>
+      <label>How firm was it</label>
       <div class="severity-row">
-        <label><input type="radio" name="sev" value="preference" checked /> Preference</label>
-        <label><input type="radio" name="sev" value="likely_dealbreaker" /> Likely dealbreaker</label>
-        <label><input type="radio" name="sev" value="uncertain" /> Uncertain</label>
+        <label><input type="radio" name="sev" value="preference" checked /> One of the reasons</label>
+        <label><input type="radio" name="sev" value="likely_dealbreaker" /> Looks like a firm no</label>
+        <label><input type="radio" name="sev" value="uncertain" /> Not sure yet</label>
       </div>
     </div>
     <div class="field">
-      <label>Rejection reason <span class="muted small">(kept private, for the matchmaker)</span></label>
+      <label>Anything in the client's own words <span class="muted small">(optional)</span></label>
       <textarea id="free-text" placeholder="e.g. Not based in Bangalore, won't relocate"></textarea>
       <div class="suggest-line" id="free-suggest"></div>
     </div>
+    <div class="field" id="rule-hint" hidden>
+      <div class="notice"></div>
+    </div>
     <div class="modal-actions">
-      <button class="btn secondary" data-close>Cancel</button>
-      <button class="btn" id="save-reject">Save rejection</button>
+      <button class="btn secondary" type="button" data-close>Cancel</button>
+      <button class="btn" id="save-reject">Save</button>
     </div>`);
 
   let selectedDim = null;
   const picker = $modal.querySelector("#dim-picker");
-  picker.querySelectorAll(".dim-chip").forEach((chip) =>
-    chip.addEventListener("click", () => {
-      picker.querySelectorAll(".dim-chip").forEach((c) => c.classList.remove("selected"));
-      chip.classList.add("selected");
-      selectedDim = chip.getAttribute("data-dim");
-      const line = $modal.querySelector("#suggest-line");
-      if (line) {
-        const v = valueOf(cand, selectedDim);
-        line.textContent = v
-          ? `${cand.name} is ${v} on ${dimLabel(selectedDim)}.`
-          : `We have nothing recorded for ${cand.name} on ${dimLabel(selectedDim)}.`;
-      }
-    })
-  );
+  const otherPicker = $modal.querySelector("#other-picker");
+  const suggestLine = $modal.querySelector("#suggest-line");
+  const ruleHint = $modal.querySelector("#rule-hint");
+
+  const wireChips = (container) =>
+    container.querySelectorAll(".dim-chip").forEach((chipEl) =>
+      chipEl.addEventListener("click", () => {
+        picker.querySelectorAll(".dim-chip").forEach((c) => c.classList.remove("selected"));
+        otherPicker.querySelectorAll(".dim-chip").forEach((c) => c.classList.remove("selected"));
+        chipEl.classList.add("selected");
+        selectedDim = chipEl.getAttribute("data-dim");
+        const value = valueOf(cand, selectedDim);
+        suggestLine.textContent = value
+          ? `${cand.name} is ${value} on ${dimLabel(selectedDim).toLowerCase()}.`
+          : `Nothing is recorded about ${cand.name}'s ${dimLabel(selectedDim).toLowerCase()}.`;
+        // If the client already has a rule here, say so. The rejection is
+        // evidence, not permission to rewrite what the client told us.
+        const rule = (cl.preferences || []).find((p) => p.dimension === selectedDim);
+        if (rule) {
+          ruleHint.hidden = false;
+          ruleHint.querySelector(".notice").innerHTML = `${esc(cl.name)} has a rule about ${esc(dimLabel(selectedDim).toLowerCase())}: ${esc(rule.summary)}. If that has changed, ask them rather than changing it here. <button class="link-btn" data-ask-here="${esc(selectedDim)}">Ask the client</button>`;
+          const askBtn = ruleHint.querySelector("[data-ask-here]");
+          if (askBtn) {
+            askBtn.addEventListener("click", () => {
+              closeModal();
+              openAnswer(clientId, cand, selectedDim);
+            });
+          }
+        } else {
+          ruleHint.hidden = true;
+        }
+      })
+    );
+  wireChips(picker);
+  wireChips(otherPicker);
 
   const freeText = $modal.querySelector("#free-text");
   const freeSuggest = $modal.querySelector("#free-suggest");
@@ -1004,12 +1258,7 @@ function openReject(clientId, cand) {
       });
       const data = await res.json();
       if (data.dimension && !selectedDim) {
-        freeSuggest.textContent = "Suggested: " + dimLabel(data.dimension) + " (tap to apply)";
-        freeSuggest.onclick = () => {
-          selectedDim = data.dimension;
-          picker.querySelectorAll(".dim-chip").forEach((c) => c.classList.toggle("selected", c.getAttribute("data-dim") === selectedDim));
-          freeSuggest.textContent = "Applied. Confirm before saving.";
-        };
+        freeSuggest.textContent = `That sounds like ${dimLabel(data.dimension).toLowerCase()}. Pick it above if that is right.`;
       }
     }, 300);
   });
@@ -1032,8 +1281,8 @@ function openReject(clientId, cand) {
     closeModal();
     showToast(
       selectedDim
-        ? `Rejection recorded against ${dimLabel(selectedDim)}.`
-        : "Rejection recorded, uncoded. It is in the ledger but no dimension to check against."
+        ? `Saved. ${cl.name}'s file now records that they said no over ${dimLabel(selectedDim).toLowerCase()}.`
+        : "Saved. It is on file, but with no reason, so there is nothing to check against next time."
     );
     render();
   });
@@ -1042,10 +1291,10 @@ function openReject(clientId, cand) {
 function openAccept(clientId, cand) {
   const dims = state.dimensions;
   openModal(`
-    <h2>Accept · ${esc(cand.name)}</h2>
-    <p class="muted small">Record what this positive response taught you. Nothing is inferred from the profile.</p>
+    <h2>They said yes · ${esc(cand.name)}</h2>
+    <p class="muted small">What mattered, and anything that surprised you. Nothing is worked out from the profile, so what you noticed is what gets written down.</p>
     <div class="field">
-      <label>What mattered? <span class="muted small">(pick one or more)</span></label>
+      <label>What mattered <span class="muted small">(pick one or more)</span></label>
       <div class="dim-picker" id="accept-dim-picker">
         ${dims
           .map((d) => `<span class="dim-chip" data-dim="${d.key}" title="${esc(d.hint)}">${esc(d.label)}</span>`)
@@ -1053,8 +1302,8 @@ function openAccept(clientId, cand) {
       </div>
     </div>
     <div class="field">
-      <label>What surprised you?</label>
-      <textarea id="accept-surprise" placeholder="e.g. He was warmer in person than his profile suggested"></textarea>
+      <label>Anything that surprised you <span class="muted small">(optional)</span></label>
+      <textarea id="accept-surprise" placeholder="e.g. Warmer in person than the profile suggested"></textarea>
     </div>
     <div class="modal-actions">
       <button class="btn secondary" data-close>Cancel</button>
@@ -1089,7 +1338,7 @@ function openAccept(clientId, cand) {
       return;
     }
     closeModal();
-    showToast("Acceptance recorded.");
+    showToast("Saved. It will come up the next time you review a profile for this client.");
     render();
   });
 }
@@ -1125,7 +1374,7 @@ function showFormError(root, message) {
 function openAddClient() {
   openModal(`
     <h2>Add a client</h2>
-    <p class="muted small">Synthetic demo records only. A new client starts on the control arm, so the pilot can allocate them.</p>
+    <p class="muted small">Synthetic demo records only. A new client gets the check by default. The pilot can move a client to the other group from the client page.</p>
     <form id="client-form" novalidate>
       <div class="field">
         <label for="c-name">Client name</label>
@@ -1297,8 +1546,8 @@ function openPreferenceEditor(clientId) {
   let chosen = [];
 
   openModal(`
-    <h2>Record what ${esc(cl.name)} said</h2>
-    <p class="muted small">A criterion has a direction and a level of firmness, and they are separate. "Must be vegetarian" and "must not be vegetarian" are opposite criteria, and only one of them can be right.</p>
+    <h2>What ${esc(cl.name)} has said</h2>
+    <p class="muted small">Record what the client told you, and how sure it is. A pattern you have noticed on your own is kept as an observation and offered to them, rather than treated as something they said.</p>
     <form id="pref-form" novalidate>
       <div class="field">
         <label for="p-dim">Which dimension</label>
@@ -1320,17 +1569,19 @@ function openPreferenceEditor(clientId) {
         <div class="muted small" id="p-value-hint"></div>
       </div>
       <div class="field">
-        <label>How firm did the client make it</label>
-        <div class="severity-row">
-          <label><input type="radio" name="kind" value="stated_preference" checked /> Stated preference</label>
-          <label><input type="radio" name="kind" value="confirmed_preference" /> Confirmed preference</label>
-          <label><input type="radio" name="kind" value="confirmed_dealbreaker" /> Confirmed dealbreaker</label>
+        <label>How sure is this</label>
+        <div class="severity-row severity-column">
+          <label><input type="radio" name="kind" value="observation" checked /> A pattern I noticed, to check with the client</label>
+          <label><input type="radio" name="kind" value="stated_preference" /> What they said when they first came in</label>
+          <label><input type="radio" name="kind" value="confirmed_preference" /> They confirmed this themselves</label>
+          <label><input type="radio" name="kind" value="confirmed_dealbreaker" /> They confirmed this is a no</label>
         </div>
-        <div class="muted small">Only a confirmed dealbreaker is treated as a firm no. The other two are advice, and the card always says which is which.</div>
+        <div class="muted small" id="kind-hint"></div>
       </div>
       <div class="field">
-        <label for="p-note">The client's own words <span class="muted small">(recommended)</span></label>
+        <label for="p-note">Their own words</label>
         <input id="p-note" type="text" placeholder="e.g. She won't consider anyone outside Bengaluru" autocomplete="off" />
+        <div class="muted small" id="note-hint"></div>
       </div>
       ${
         existing.length
@@ -1351,6 +1602,26 @@ function openPreferenceEditor(clientId) {
   const opSel = root.querySelector("#p-op");
   const picker = root.querySelector("#p-value-picker");
   const opHint = root.querySelector("#p-op-hint");
+  const kindHint = root.querySelector("#kind-hint");
+  const noteHint = root.querySelector("#note-hint");
+  const kindEls = [...root.querySelectorAll('input[name="kind"]')];
+  function renderHints() {
+    const kind = (kindEls.find((el) => el.checked) || {}).value;
+    kindHint.textContent =
+      kind === "observation"
+        ? "An observation is something you noticed. It is shown to you and offered to the client, and it never rules a profile out on its own."
+        : kind === "stated_preference"
+          ? "What they said when they first came in. It is advice, and it does not stop a profile going out."
+          : kind === "confirmed_preference"
+            ? "They confirmed this. It is checked every time, and shown as a preference rather than a no."
+            : "They confirmed this is a no. It is checked every time, and a profile that breaks it is a conflict.";
+    noteHint.textContent =
+      kind === "observation"
+        ? "Optional. If they said something, put their words here."
+        : "Needed. A confirmed criterion is only as good as the record of what they said.";
+  }
+  kindEls.forEach((el) => el.addEventListener("change", renderHints));
+  renderHints();
   const valHint = root.querySelector("#p-value-hint");
 
   function renderPicker() {
@@ -1411,64 +1682,10 @@ function openPreferenceEditor(clientId) {
   });
 }
 
-function openAddToQueue(clientId) {
-  const cl = client(clientId);
-  const onList = new Set(cl.queue.map((q) => q.id));
-  const others = state.candidates.filter((c) => !onList.has(c.id));
-
-  openModal(`
-    <h2>Shortlist a candidate for ${esc(cl.name)}</h2>
-    ${
-      others.length
-        ? `<form id="q-form" novalidate>
-            <div class="field">
-              <label for="q-cand">Candidate</label>
-              <select id="q-cand">
-                ${others
-                  .map(
-                    (c) =>
-                      `<option value="${esc(c.id)}">${esc(c.name)} · ${esc(c.city)} · ${esc(c.profession)}</option>`
-                  )
-                  .join("")}
-              </select>
-            </div>
-            <div class="form-error" role="alert" hidden></div>
-            <div class="modal-actions">
-              <button class="btn secondary" type="button" data-close>Cancel</button>
-              <button class="btn" type="submit">Add to shortlist</button>
-            </div>
-          </form>`
-        : `<p class="muted">Every candidate is already on this client's shortlist. Add a new candidate from the Candidates view first.</p>
-           <div class="modal-actions"><button class="btn" type="button" data-close>Close</button></div>`
-    }`);
-
-  const root = $modal.querySelector(".modal");
-  root.querySelector("[data-close]").addEventListener("click", closeModal);
-  const form = root.querySelector("#q-form");
-  if (form) {
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const candidateId = root.querySelector("#q-cand").value;
-      const res = await action("add_to_queue", { clientId, candidateId });
-      if (!res.ok) return showFormError(root, res.message);
-      const cand = state.candidates.find((c) => c.id === candidateId);
-      closeModal();
-      showToast(`${cand ? cand.name : "Candidate"} added to ${cl.name}'s shortlist.`);
-      render();
-    });
-  }
-}
-
-// ---- the candidates view ----
-
-function renderCandidates() {
+function renderProfiles() {
   const cards = state.candidates
-    .map((cand) => {
-      const clientOptions = state.clients
-        .map((c) => `<option value="${esc(c.id)}">${esc(c.name)}</option>`)
-        .join("");
-      return `
-      <div class="candidate">
+    .map(
+      (cand) => `<div class="candidate">
         <div class="candidate-head">
           <div>
             <div class="candidate-name">${esc(cand.name)}</div>
@@ -1478,23 +1695,82 @@ function renderCandidates() {
         <div class="taglist">
           ${cand.dimensions.length ? cand.dimensions.map((d) => `<span class="tag">${esc(dimLabel(d))}${valueOf(cand, d) ? ": " + esc(valueOf(cand, d)) : ""}</span>`).join("") : `<span class="tag muted">nothing recorded</span>`}
         </div>
-        <div class="candidate-actions">
-          <select data-check-client="${esc(cand.id)}" aria-label="Client to check ${esc(cand.name)} against">${clientOptions}</select>
-          <button class="btn" data-check="${esc(cand.id)}">Check against this client</button>
-        </div>
-      </div>`;
-    })
+      </div>`
+    )
     .join("");
 
   $app.innerHTML = `
     <div class="view-head">
       <div>
-        <h1>Candidates</h1>
-        <p class="lead">Every profile in the workspace. Pick a client and the check runs against that client's recorded criteria, without anything being sent.</p>
+        <h1>Profiles</h1>
+        <p class="lead">Every profile in the workspace and what is known about it. To check one against a client, open that client and choose a profile to review.</p>
       </div>
-      <button class="btn" data-add-candidate>Add a candidate</button>
+      <button class="btn" data-add-candidate>Add a profile</button>
     </div>
     <div class="candidate-grid">${cards}</div>`;
+}
+
+// The check for a pair that is not on the client's list yet.
+async function evaluateFor(clientId, cand) {
+  const res = await fetch(
+    `/api/check?clientId=${encodeURIComponent(clientId)}&candidateId=${encodeURIComponent(cand.id)}`
+  );
+  if (!res.ok) return null;
+  return res.json();
+}
+
+// Choose a profile to review for this client. It shows what is known about
+// each profile, so the matchmaker can pick without opening anything.
+function openProfilePicker(clientId) {
+  const cl = client(clientId);
+  const onList = new Set(cl.queue.map((q) => q.id));
+  const others = state.candidates.filter((c) => !onList.has(c.id));
+
+  openModal(`
+    <h2>Choose a profile to review for ${esc(cl.name)}</h2>
+    <p class="muted small">${esc(cl.name)} has ${esc(dimLabel((cl.preferences[0] || {}).dimension) || "")}${cl.preferences.length ? " on file: " + esc(cl.preferences.map((p) => p.summary).join("; ")) : " nothing on file yet"}.</p>
+    <div class="picker-list">
+      ${
+        others.length
+          ? others
+              .map(
+                (cand) => `<button class="picker-row" data-pick="${esc(cand.id)}">
+                  <div>
+                    <div class="candidate-name">${esc(cand.name)}</div>
+                    <div class="candidate-sub">${esc(cand.city)} · ${esc(cand.profession)}</div>
+                    <div class="taglist">
+                      ${cand.dimensions.length ? cand.dimensions.map((d) => `<span class="tag">${esc(dimLabel(d))}${valueOf(cand, d) ? ": " + esc(valueOf(cand, d)) : ""}</span>`).join("") : `<span class="tag muted">nothing recorded</span>`}
+                    </div>
+                  </div>
+                </button>`
+              )
+              .join("")
+          : `<p class="muted small">Every profile is already on this client's list.</p>`
+      }
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" type="button" data-close>Close</button>
+      <button class="btn" type="button" data-new-profile>Add a new profile</button>
+    </div>`);
+
+  const root = $modal.querySelector(".modal");
+  root.querySelector("[data-close]").addEventListener("click", closeModal);
+  root.querySelectorAll("[data-pick]").forEach((row) =>
+    row.addEventListener("click", async () => {
+      const cand = candidate(row.getAttribute("data-pick"));
+      closeModal();
+      const review = await evaluateFor(clientId, cand);
+      if (!review) {
+        showToast("That check could not run.");
+        return;
+      }
+      await openSend(clientId, cand, review);
+    })
+  );
+  root.querySelector("[data-new-profile]").addEventListener("click", () => {
+    closeModal();
+    openAddCandidate();
+  });
 }
 
 // ---- events ----
@@ -1522,6 +1798,10 @@ $app.addEventListener("click", async (e) => {
     openAddCandidate();
     return;
   }
+  if (e.target.closest("[data-add-matchmaker]")) {
+    openAddMatchmaker();
+    return;
+  }
   const addPref = e.target.closest("[data-add-pref]");
   if (addPref) {
     openPreferenceEditor(addPref.getAttribute("data-add-pref"));
@@ -1529,7 +1809,7 @@ $app.addEventListener("click", async (e) => {
   }
   const addCand = e.target.closest("[data-add-cand]");
   if (addCand) {
-    openAddToQueue(addCand.getAttribute("data-add-cand"));
+    openProfilePicker(addCand.getAttribute("data-add-cand"));
     return;
   }
   const rmPref = e.target.closest("[data-rm-pref]");
@@ -1586,20 +1866,29 @@ $app.addEventListener("click", async (e) => {
     render();
     return;
   }
-  const checkEl = e.target.closest("[data-check]");
-  if (checkEl) {
-    const candId = checkEl.getAttribute("data-check");
-    const sel = $app.querySelector(`[data-check-client="${candId}"]`);
-    const clientId = sel ? sel.value : state.clients[0].id;
-    const res = await fetch(
-      `/api/check?clientId=${encodeURIComponent(clientId)}&candidateId=${encodeURIComponent(candId)}`
-    );
-    if (!res.ok) {
-      showToast("That check could not run.");
-      return;
-    }
-    const review = await res.json();
-    await openSend(clientId, candidate(candId), review);
+  const pickEl = e.target.closest("[data-add-cand]");
+  if (pickEl) {
+    openProfilePicker(pickEl.getAttribute("data-add-cand"));
+    return;
+  }
+  const askClientEl = e.target.closest("[data-ask-client]");
+  if (askClientEl) {
+    const clientId = askClientEl.getAttribute("data-ask-client");
+    const dimension = askClientEl.getAttribute("data-dimension");
+    const cand = (client(clientId).queue || [])[0] || candidate((state.candidates || [])[0].id);
+    openAnswer(clientId, cand, dimension);
+    return;
+  }
+  const sayNoEl = e.target.closest("[data-say-no]");
+  if (sayNoEl) {
+    const clientId = currentClientId;
+    openReject(clientId, candidate(sayNoEl.getAttribute("data-say-no")));
+    return;
+  }
+  const sayYesEl = e.target.closest("[data-say-yes]");
+  if (sayYesEl) {
+    const clientId = currentClientId;
+    openAccept(clientId, candidate(sayYesEl.getAttribute("data-say-yes")));
     return;
   }
   const sendEl = e.target.closest("[data-send]");
@@ -1643,10 +1932,7 @@ if (matchmakerSelect) {
   });
 }
 
-const manageMatchmakerBtn = document.getElementById("manage-mm-btn");
-if (manageMatchmakerBtn) {
-  manageMatchmakerBtn.addEventListener("click", openAddMatchmaker);
-}
+
 
 document.getElementById("reset-btn").addEventListener("click", async () => {
   const res = await action("reset", {});

@@ -59,7 +59,7 @@ The control arm is a no-surfacing control, not a no-capture control. Structured 
 
 ## 6. Consent and client communication
 
-- Matchmakers consent to having their capture and send-time behaviour measured.
+- Matchmakers consent to having their capture and send-time behaviour measured. They are told that a confirmed preference or deal breaker can only be recorded with what the client said, and asked whether that is workable.
 - Clients consent to having structured feedback recorded, and are told that a matchmaker may ask a clarifying question when their feedback is unclear. Client communication is kept to the existing check-in rhythm; no new client-facing surface or message is added.
 - Clients are told they can decline recording at any time, in which case their rejection is captured as free text only.
 - The pilot does not assume a client has agreed to AI processing merely because the company uses a CRM. In this pilot the classification is deterministic and human-confirmed, so no model processes client data at all. If a model were introduced, separate, specific consent would be required before it touched client data.
@@ -84,7 +84,7 @@ Every event is timestamped and carries a client id and actor id.
 | --- | --- | --- |
 | `profile_shared` | client, candidate, source, shared_at | Denominator for ARCR |
 | `rejection_logged` | client, candidate, dimension, severity, free_text, capture latency | Numerator and the ledger |
-| `profile_accepted` | client, candidate, accepted_at | Second half of a contradiction |
+| `profile_accepted` | client, candidate, accepted_at | A decision. It is context, not proof of a preference, and it can contradict a criterion on file |
 | `card_shown` | client, candidate, dimension, state, evidence profile, shown_at | Exposure |
 | `card_resolved` | card, action, rationale, resolved_at | Behaviour change |
 | `preference_confirmed` | client, dimension, answer, confirmed_at | The autonomy constraint |
@@ -105,7 +105,11 @@ The numerator is decided by an audit, not by the card. Every share is re-evaluat
 
 Three more numbers are reported alongside, because the rate alone can flatter itself. **Unknown coverage**, the share of audited profiles where the check could not be made because a candidate attribute is missing, which is never counted as clean. The **override rate** with the reason given for each override, because a matchmaker who overrides every warning has a tool that is not working. And the **human-confirmed rate**, from a periodic blind re-code of a sample, because an automated audit can inherit the rule engine's own mistakes.
 
+**A profile with nothing to compare against.** Where the client had no criterion on file, the profile cannot be judged, and it is not counted as a clean result. It is reported on its own row, so a group whose criteria are thin cannot look better than a group whose criteria are complete.
+
 **Diagnostic.** Avoidable repeat-conflict rate (ARCR), client level. Numerator: eligible shared profiles rejected for a dimension with a prior coded rejection before the share. Denominator: eligible shared profiles. Reported with three sub-rates: hard-conflict, contradiction-conditional and plain-recurrence. ARCR measures recurrence, not avoidability, and the historical stated-preference conflict rate sits beside it as a post-hoc comparison to the brief's 35% figure.
+
+**A contradiction is not a repeat.** A contradiction is a decision that disagrees with a criterion the client had on file at the time, on the same dimension and later than the criterion. It is not the pattern of having rejected one profile on a dimension and later accepted another, which is ordinary indecision and is recorded as history. Only the first is a finding, and only the first is audited.
 
 **Diagnostic.** Metric A, stated-preference conflict rate, using the assessment's 35% as a provisional baseline only.
 
@@ -148,9 +152,9 @@ A two-week window establishes feasibility and a directional signal only. Causal 
 
 **Iterate** if capture or latency misses, false-positive flags are high, matchmaker time rises, or the card is ignored.
 
-**Change direction** if no genuine contradiction ever surfaces, meaning the reject-then-accept pattern the ledger targets does not exist in this population, or if ARCR does not move and matchmakers report the card is not the constraint.
+**Change direction** if no genuine contradiction ever surfaces, meaning the client's decisions never disagree with what they told us, or if ARCR does not move and matchmakers report the card is not the constraint.
 
-**Stop** if any safety guardrail breaks, a preference changes without client confirmation, a client reports feeling processed, a cross-client leak occurs, or the matchmakers ask for the tool to be removed.
+**Stop** if any safety guardrail breaks, a preference changes without client confirmation, a client reports feeling processed, a cross-client leak occurs, or the matchmakers ask for the tool to be removed. A confirmed rule recorded without the client's words counts as the same break, because it is the same failure of the constraint.
 
 ---
 
@@ -165,7 +169,7 @@ A two-week window establishes feasibility and a directional signal only. Causal 
 
 ## 14. Requirements before a real TDC deployment
 
-1. Confirm the 35% denominator and the reject-then-accept pattern exist in TDC's population.
+1. Confirm the 35% denominator, and whether clients' decisions ever disagree with what they told us.
 1a. Confirm the criteria the tool compares against can be recorded accurately enough to compare against, direction included. A misrecorded direction produces a confidently wrong check that nothing in the tool can detect.
 2. Written consent from matchmakers and clients, and a data protection review against the DPDP Act 2023 and IT Act 2000 basis the company already relies on.
 3. Access to the existing CRM to read match histories and write the structured fields, or a side-by-side capture surface accepted by the matchmakers.

@@ -6,8 +6,8 @@ What the assessment brief asks for, where each item is, and what is still outsta
 
 | Brief item | Where | Status |
 | --- | --- | --- |
-| 1. Your answers, as a document | `ASSIGNMENT_SUBMISSION.md` | Done. Part 1 is 299 words, Part 2 is 495, Part 4 is 185, in the headings the brief asks for |
-| 2. Prototype: working link, screenshots or recording | `screenshots/`, run instructions in the submission and in `README.md` | Done. Seven screenshots re-captured against the current build, a local run command, and a verified walkthrough in `docs/DEMO_SCRIPT.md` |
+| 1. Your answers, as a document | `ASSIGNMENT_SUBMISSION.md` | Done. Part 1 is 299 words, Part 2 is 499, Part 4 is 192 in the body and 198 with its heading, in the headings the brief asks for. Counts are measured from the file, not asserted |
+| 2. Prototype: working link, screenshots or recording | `screenshots/`, run instructions in the submission and in `README.md` | Done. Seven screenshots re-captured against the current build, a local run command, and a verified walkthrough in `docs/DEMO_SCRIPT.md`. No public link yet, because publishing needs the user's approval |
 | 3. Code, on GitHub | The repository | Ready. No remote yet, publishing on approval |
 | 4. AI usage in 3 to 5 lines: tools, what for, one thing you disagreed with | `ASSIGNMENT_SUBMISSION.md`, the AI usage section | Done. Four lines, and the disagreement is a real one |
 | 5. Updated resume | Not produced | Needs the user's actual resume and sign-off |
@@ -20,7 +20,8 @@ What the assessment brief asks for, where each item is, and what is still outsta
 | `docs/README.md` | The document index, and which file is the assessment of record |
 | `docs/MEASUREMENT_MODEL.md` | The primary outcome, the adoption guardrail, the audit, and what a two-week pilot could and could not show |
 | `docs/PRODUCT_THINKING.md` | The problem, the reasoning, the assumptions, what would change the direction |
-| `docs/PRODUCT_DECISIONS.md` | Sixteen decisions with their trade-offs, plus the feature classification |
+| `docs/PRODUCT_DECISIONS.md` | Seventeen decisions with their trade-offs, the feature classification, and how the direction moved from a rejection-ledger-first idea to the pre-send check |
+| `docs/TERMINOLOGY.md` | The words the product uses, the company source of each one, and the plain-language labels the measurement view uses |
 | `docs/DEMO_SCRIPT.md` | Verified walkthrough with exact commands and expected results |
 | `docs/VALIDATION_PLAN.md` | The assumptions that need real matchmaker validation, and the proposed steps |
 | `docs/AI_USAGE.md` | AI disclosure, both the assistance used in producing the work and the AI inside the product |
@@ -36,16 +37,18 @@ What the assessment brief asks for, where each item is, and what is still outsta
 
 | Check | Result |
 | --- | --- |
-| Test suite | 104 pass, 0 fail, `node --test`, three consecutive runs with no flakiness |
+| Test suite | 139 pass, 0 fail, `node --test`, three consecutive runs with no flakiness |
 | Clean start | `npm start` from a wiped store serves the page, the API and the assets, and seeds itself. The store file is written on the first save, not on boot |
-| End to end, in the browser | Select the acting matchmaker, create a client, record a criterion with a direction, add a candidate with attributes, check without sending, send past a warning with a reason, and read the measurement. Every screen checked with zero console errors |
+| End to end, in the browser | Open a client and read the three evidence tiers, open the check, hold a profile and confirm nothing was sent, ask the client and record an answer with the direction, the values, the firmness and the client's words, read the change log, open a confirmed deal breaker and see the reason box, read the measurement. Every screen checked with zero console errors |
 | Invalid input | A duplicate client name and an empty name are both refused with a message naming the field, and no success message appears |
 | Persistence | A client and a criterion created through the API survive a server restart, along with the change log, and the check uses them afterwards |
-| Preference checking | Conflict, preference mismatch, contradiction, prior rejection, incomplete, untagged, uncoded history and no conflict are all exercised by the test suite and shown in the interface |
+| Preference checking | Conflict, preference mismatch, contradiction, prior rejection, incomplete, untagged, uncoded history, nothing to compare against and no conflict are all exercised by the test suite and shown in the interface |
+| The truth rule | A client's answer establishes a preference; accepting and rejecting write no criterion; an observation never fires a finding, never excludes a candidate and is never audited as a conflict; a confirmed rule is refused without the client's words. Covered in `test/truth.test.js` through the store and the action layer, so no other code path can bypass it |
+| A held profile is not sent | The hold action writes a resolution and no share event, the row reads "Held, not sent", and the held profile never enters the measurement denominator |
 | Matchmaker keeps control | Nothing is blocked, every override is logged with a reason, no criterion changes without the client's words, and the old version of a criterion is kept |
-| Links and file references | 115 checked across all markdown, 0 broken |
+| Links and file references | Every markdown link and file reference in the repository checked, 0 broken |
 | Secrets and personal data | gitleaks clean over the history, no phone numbers, no personal email addresses, no keys in tracked files |
-| Screenshots | Seven, re-captured against the current build, each with zero console errors, each inspected |
+| Screenshots | Seven, re-captured against the current build from a clean store, each with zero console errors, each inspected after capture |
 | Em dashes and filler phrases | None in the public documents |
 | Licence | Not added, the choice is the user's |
 

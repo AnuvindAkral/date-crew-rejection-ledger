@@ -1,7 +1,18 @@
 "use strict";
 
 const { DIMENSIONS, SEVERITIES, dimensionLabel } = require("./dimensions");
-const { evaluateSend, acceptanceAfter, acceptanceDimensions, candidateDimensions } = require("./rules");
+const {
+  evaluateSend,
+  acceptanceAfter,
+  acceptanceDimensions,
+  candidateDimensions,
+  criteriaAt,
+  criterionSummary,
+  criterionTier,
+  decisionsAgainstCriterion,
+  KIND_HEADLINE,
+  TIER_HEADLINE,
+} = require("./rules");
 const { computeMetricA, computeArcr, computeSessionMetrics } = require("./metrics");
 
 function buildLedger(store, clientId) {
@@ -43,10 +54,14 @@ function buildLedger(store, clientId) {
       (a, b) => new Date(a.recordedAt) - new Date(b.recordedAt)
     );
     const earliest = list[0];
+    // A contradiction is a decision that disagrees with a criterion the client
+    // has on file. It is not simply that they once accepted one profile and
+    // rejected another.
+    const criterionInForce = criteriaAt(store, clientId, earliest.recordedAt).get(row.dimension);
     const contradiction =
-      list.length > 0 &&
-      row.acceptedCount > 0 &&
-      acceptanceAfter(store, clientId, row.dimension, earliest.recordedAt);
+      !!criterionInForce &&
+      criterionInForce.kind !== "observation" &&
+      decisionsAgainstCriterion(store, clientId, row.dimension, criterionInForce).length > 0;
     return {
       dimension: row.dimension,
       label: dimensionLabel(row.dimension),
@@ -86,7 +101,17 @@ function buildBootstrap(store) {
       arm: c.arm,
       matchmakerId: c.matchmakerId,
       matchmakerName: mm ? mm.name : null,
-      preferences: store.activeCriteria(c.id),
+      preferences: store.activeCriteria(c.id).map((p) => ({
+        ...p,
+        // The plain wording, worked out once on the server so the interface
+        // does not have to phrase the same criterion in two places.
+        summary: criterionSummary(p),
+        firmness: KIND_HEADLINE[p.kind] || "criterion",
+        tier: criterionTier(p),
+        tierLabel: TIER_HEADLINE[criterionTier(p)],
+        sourceLabel:
+          p.source === "client_answer" ? "Confirmed by the client" : "From the onboarding call",
+      })),
       criterionHistory: store.criterionHistory(c.id),
       preferenceEvents: store.preferenceEvents(c.id),
       confirmations: store.confirmations(c.id),
@@ -103,6 +128,37 @@ function buildBootstrap(store) {
       metricA: computeMetricA(store, c.id),
       arcr: computeArcr(store, c.id),
       audits: store.auditsFor(c.id),
+      contradictions: store.clientContradictions(c.id),
+      // The profiles this client has been sent, with what came back. The
+      // outcome is recorded here so the matchmaker can capture it from the
+      // same place they sent the profile, rather than from a separate ledger.
+      sent: store
+        .shares(c.id)
+        .slice()
+        .sort((a, b) => new Date(b.sharedAt) - new Date(a.sharedAt))
+        .map((s) => {
+          const rejections = store.rejections(c.id).filter((r) => r.candidateId === s.candidateId);
+          const acceptances = store.acceptances(c.id).filter((a) => a.candidateId === s.candidateId);
+          const cand = store.candidate(s.candidateId);
+          return {
+            id: s.id,
+            candidateId: s.candidateId,
+            candidateName: cand ? cand.name : s.candidateId,
+            candidateCity: cand ? cand.city : null,
+            sharedAt: s.sharedAt,
+            actor: s.actor,
+            outcome: rejections.length ? "rejected" : acceptances.length ? "accepted" : "pending",
+            rejection: rejections.length
+              ? {
+                  dimension: rejections[rejections.length - 1].dimension,
+                  severity: rejections[rejections.length - 1].severity,
+                  freeText: rejections[rejections.length - 1].freeText,
+                  recordedAt: rejections[rejections.length - 1].recordedAt,
+                }
+              : null,
+            acceptance: acceptances.length ? { acceptedAt: acceptances[0].acceptedAt } : null,
+          };
+        }),
       queue: queue.map((cand) => ({
         ...cand,
         dimensions: candidateDimensions(cand),

@@ -18,6 +18,10 @@ Two things are worth stating plainly about how that assistance was used.
 
 **The fourth review found the direction was still missing, and the metric could be gamed.** Even after the value comparison, a criterion still stored only a value, so the direction was inferred from the kind. A client who said "I only want a vegetarian partner" was flagged on the vegetarian candidate and passed on the non-vegetarian one, which is backwards. The direction is now recorded separately from the firmness. The same review pointed out that the primary metric was computed over the profiles a matchmaker chose to check, so it could improve if matchmakers stopped using the tool, and that the coverage figure printed next to it measured app-recorded shares against seeded history rather than whether anyone opened the card. The metric is now an audit over every share, and the card view is what the adoption guardrail is built on.
 
+**A later usability pass found the same bug in the wording, and it was mine.** The direction was being written out backwards in the plain-English sentence, so the check named the opposite of what the client had asked for. A unit test caught it, which is the kind of error that would have survived a demo and reached a client.
+
+**A later pass found that the product was reading the client's history as their preference.** The contradiction finding fired when a client had rejected someone on a dimension and later accepted someone else, and the client's file grouped that history next to what they had said, which invited the matchmaker to read one as the other. The rule the product now rests on is that a client's explicit answer establishes their preference, their history is context rather than proof, and a matchmaker's inference stays a hypothesis. So a contradiction is now a decision that disagrees with a criterion on file, on the same dimension and later than the criterion. Accepting and rejecting write no criterion at all. A matchmaker's noticed pattern is recorded as an observation, and a confirmed rule is refused unless the client's own words are written down. The agent's suggestion to keep the old reject-then-accept behaviour as a lighter-weight warning was rejected, because a warning that fires on ordinary indecision would have trained matchmakers to ignore the one that matters.
+
 Two independent reviews is not a lot of scrutiny, and neither substitutes for a real matchmaker. The reasoning is recorded in [REVIEW_FINDINGS.md](REVIEW_FINDINGS.md) and [REVIEW_FINDINGS_PROTOTYPE.md](REVIEW_FINDINGS_PROTOTYPE.md) rather than presented as a clean run.
 
 ## Part two: AI inside the product
@@ -37,9 +41,10 @@ The decision path, end to end:
 | Missing information, untagged candidate | Deterministic | No |
 | Criterion direction, must be or must not be | The matchmaker records it, from what the client said | No |
 | Auditing a past share | The server, against the criteria in force at the time | No |
-| Contradiction check, reject then accept | Deterministic, needs evidence from both events | No |
+| Contradiction check, a decision against a criterion | Deterministic, needs the criterion and the decision | No |
+| Recording a criterion | The matchmaker records what the client said, and the words go in with it | No |
 | Acceptance debrief capture | Matchmaker writes what mattered and what surprised | No, and nothing is inferred |
-| Write a confirmed rule | The client's recorded words, recorded by the matchmaker | No |
+| Write a confirmed rule | The client's recorded words, recorded by the matchmaker | No, and it is refused without them |
 | Proceed, hold or resolve | Matchmaker | No |
 
 ## Why the suggestion is the only place a model would sit
@@ -53,7 +58,7 @@ Normalising prose into a fixed vocabulary is what keeps rejection capture at a f
 - No compatibility score and no ranking. A model that ranks people would sit where the brand says a human must be, and it could not be evaluated anyway, since outcome labels for this business take a year or more to accumulate.
 - No automatic rejection. Nothing is filtered out without a matchmaker deciding.
 - No model-written client messages. An introduction note is the most trust-sensitive thing a matchmaker sends.
-- No silent preference writes. The only path that writes a client preference requires the client's recorded words, in `src/lib/store.js` `recordClientAnswer`, and it is covered by tests.
+- No silent preference writes. The only paths that write a client preference are `recordClientAnswer` and `setPreference` in `src/lib/store.js`, and both refuse a confirmed rule without the client's recorded words or their own words in the note. Accepting and rejecting write no preference at all. It is covered by `test/truth.test.js`.
 - No model touching client data at all in this prototype, because classification is deterministic.
 
 ## The consent point

@@ -22,7 +22,7 @@ phase: 1 of 2
 | SITEMAP.md | Four surfaces, primary journey, acceptance criteria, explicit exclusions |
 | PROJECT_STATUS.md | This file |
 
-The five files sit in `/Users/anuvindmac/.opencode/plan/date-crew-assessment/` because the assessment ran in plan mode, where writing is restricted to that directory. On approval they should move into a project workspace of your choosing.
+The five files were written in a planning directory before the project workspace existed, and were copied into this repository when the work was approved. They are preserved here as they were written.
 
 ---
 

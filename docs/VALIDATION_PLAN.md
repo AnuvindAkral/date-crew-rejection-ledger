@@ -8,7 +8,7 @@ The point of this document is to be specific about what is assumed, so that the 
 
 | # | Assumption | Why it is unproven |
 | --- | --- | --- |
-| A1 | The reject-then-accept pattern exists in TDC's population | It comes from the supplied brief and the founder's writing. It has never been counted |
+| A1 | Clients' decisions sometimes disagree with what they told us | The brief reports a client rejecting a profile and later accepting a similar one. It has never been counted, and the tool flags a disagreement with a criterion on file rather than that pattern itself |
 | A2 | Acceptance carries information that rejection does not | The debrief's entire premise. No data supports it |
 | A3 | The debrief fits a matchmaker's workflow without adding admin | Every capture feature risks becoming a form to fill |
 | A4 | Surfacing the rejection history at send time changes a decision | The mechanism was designed from first principles and research, not observation |
@@ -17,7 +17,7 @@ The point of this document is to be specific about what is assumed, so that the 
 | A7 | Channel is a meaningful axis for unsuitable introductions | Never tested, which is why the scorecard was excluded |
 | A8 | The criteria on file match what the client would say today | The check compares against them. A stale or wrong criterion produces a wrong check, and the tool has no way to tell |
 | A9 | A matchmaker will keep the criteria on file current | Nothing in the system reminds them. The change log records drift after the fact, it does not prevent it |
-| A10 | Enough shares are checked for the rate to mean anything | The rate is measured on checked shares only, and coverage is reported beside it. A pilot with low coverage would produce a number that looks precise and is not |
+| A10 | Enough shares are checked for the rate to mean anything | The rate is audited over every profile shared, and adoption is reported beside it. A pilot where the check is rarely opened would produce a rate that does not move, and it would not mean the check does not work |
 | A11 | The automated audit agrees with what a person would code from the same file | The audit uses the same rule engine as the card, so it can inherit the engine's mistakes. It is consistent, which is what a measurement needs, and consistent is not the same as right. A blind human re-code of a sample is the check |
 | A12 | A criterion's direction is recorded the way the client meant it | A criterion says "must be vegetarian" or "must not be vegetarian", and only the client can say which. A misrecorded direction produces a check that is confidently wrong, and nothing in the tool can detect it |
 
@@ -57,9 +57,11 @@ Take a sample of shared profiles from the baseline period, and have a second per
 
 **What it settles.** A11, and the confidence interval on everything else. Without it the primary outcome is a number produced by the same rules as the thing it is measuring.
 
+**How disagreements are reviewed.** The re-coder sees the client's file and the profile that was sent, and nothing else: not which group the client was in, not what the automated review said, and not any earlier feedback on that client. Where the two classifications differ, both are kept and both are reported. The reviewer's reading is the one that goes into the headline figure, with the automated one kept beside it, and the sample is then read for a pattern: a disagreement concentrated in one dimension is a rule that is wrong, and a disagreement spread evenly is a definition that is ambiguous. Either way the rule changes, and the change is recorded against the version that was live at the time.
+
 ### Step 5: the proposed pilot
 
-Only if steps 1 to 3 support the direction. The concurrent client-level design, metrics, guardrails, and stop conditions are in [PILOT_PLAN.md](../PILOT_PLAN.md).
+Only if steps 1 to 4 support the direction. The concurrent client-level design, metrics, guardrails, and stop conditions are in [PILOT_PLAN.md](../PILOT_PLAN.md).
 
 ## What the prototype can and cannot tell us
 
@@ -74,6 +76,6 @@ If no matchmaker can be reached, the honest fallback is to label the work as a m
 ## What would abandon the idea
 
 - The conversations show acceptance carries no information rejection does not already carry. The debrief goes.
-- The reject-then-accept pattern does not exist in the population. The contradiction card goes.
+- Clients' decisions never disagree with what they told us. The contradiction card goes.
 - Matchmakers report the ledger surfaces things they already knew and would have checked anyway. Then the value is in the debrief alone, or nowhere.
 - Clients report the workflow makes them feel processed. The product stops.

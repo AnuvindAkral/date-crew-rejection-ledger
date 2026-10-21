@@ -19,14 +19,26 @@ test("bootstrap exposes candidates, dimensions and per-client review states", ()
 
   const priya = b.clients.find((c) => c.id === "c1");
   assert.ok(priya.queue.every((q) => typeof q.review === "object" && q.review.state));
-  assert.ok(priya.ledger.rows.some((r) => r.dimension === "location_city_tier" && r.contradiction));
+  // Priya confirmed she will not accept a smoker, and she later accepted
+  // Arjun T., who is a regular smoker. The two do not agree.
+  assert.ok(
+    priya.contradictions.some(
+      (c) => c.dimension === "smoking_habit" && c.decisions[0].candidateName === "Arjun T."
+    ),
+    "the contradiction is on the dimension where a decision disagrees with a criterion"
+  );
+  // Her rejections over location are older than the criterion, so they are
+  // where the criterion came from and are not held against it.
+  assert.ok(
+    !priya.ledger.rows.some((r) => r.dimension === "location_city_tier" && r.contradiction)
+  );
   assert.equal(priya.arcr.rate, 0.4);
 });
 
 test("every queue candidate review state is one of the known states", () => {
   const store = createStore(buildSeed(NOW));
   const b = buildBootstrap(store);
-  const allowed = new Set(["conflict", "contradiction", "repeat", "preference_mismatch", "incomplete", "clean", "untagged", "no_history", "uncoded_only"]);
+  const allowed = new Set(["conflict", "contradiction", "repeat", "preference_mismatch", "incomplete", "clean", "untagged", "no_history", "no_criteria", "uncoded_only"]);
   for (const c of b.clients) {
     for (const q of c.queue) {
       assert.ok(allowed.has(q.review.state), `unexpected state ${q.review.state}`);
@@ -41,6 +53,8 @@ test("control-arm clients compute warnings but do not surface them", () => {
     id: "p-ctrl",
     clientId: "c3",
     dimension: "values_intent",
+    operator: "must_be",
+    values: ["Wants children"],
     kind: "stated_preference",
     confirmed: false,
     status: "active",

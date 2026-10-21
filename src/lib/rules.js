@@ -19,7 +19,7 @@
 // categories. Where the candidate's value is not known, the finding is that
 // the information is missing, never that there is no conflict.
 
-const { dimensionLabel } = require("./dimensions");
+const { dimensionLabel, dimensionNoun, valuePhrase, displayValue } = require("./dimensions");
 
 // The order a card leads with. A conflict is a firm no, an incomplete record is
 // the least useful thing to say, and missing information is not a clean result.
@@ -29,6 +29,59 @@ const SEVERITY_RANK = {
   repeat: 2,
   preference_mismatch: 3,
   incomplete: 4,
+};
+
+// What each finding is called, in the words a matchmaker would use.
+const FINDING_HEADLINE = {
+  conflict: "Dealbreaker",
+  preference_mismatch: "Preference mismatch",
+  contradiction: "Their file disagrees with itself",
+  repeat: "You have rejected on this before",
+  incomplete: "Missing information",
+};
+
+// What each level of firmness is called, for a matchmaker.
+const KIND_HEADLINE = {
+  confirmed_dealbreaker: "Dealbreaker",
+  confirmed_preference: "Confirmed preference",
+  stated_preference: "Stated preference",
+  observation: "An observation to check",
+};
+
+// The tiers of evidence, which are not the same thing as the kinds.
+//
+//   confirmed   the client has answered or confirmed this
+//   stated      recorded at intake from what the client said
+//   observation a matchmaker has noticed a pattern. It is a hypothesis, and it
+//               is never used to exclude a candidate until the client confirms it
+const OBSERVATION = "observation";
+
+function isObservation(criterion) {
+  return !!criterion && criterion.kind === OBSERVATION;
+}
+
+function isConfirmed(criterion) {
+  if (!criterion) return false;
+  return (
+    criterion.kind === "confirmed_dealbreaker" ||
+    criterion.kind === "confirmed_preference" ||
+    criterion.source === "client_answer"
+  );
+}
+
+// What tier of evidence a criterion rests on, for the interface.
+function criterionTier(criterion) {
+  if (!criterion) return "none";
+  if (isObservation(criterion)) return "observation";
+  if (isConfirmed(criterion)) return "confirmed";
+  return "stated";
+}
+
+const TIER_HEADLINE = {
+  confirmed: "Confirmed by the client",
+  stated: "Recorded at intake",
+  observation: "An observation to check, not a rule",
+  none: "",
 };
 
 const OPERATORS = {
@@ -116,42 +169,63 @@ function criterionExplanation(criterion) {
   return `${dimensionLabel(criterion.dimension)} ${op.explain(criterionValues(criterion))} (${kind})`;
 }
 
+// A criterion as a short line, the way a matchmaker would say it out loud.
+// "Wants a partner who is a non-smoker", or "Will not accept any of: occasional
+// smoker, regular smoker".
+function criterionSummary(criterion) {
+  if (!criterion) return "";
+  const values = criterionValues(criterion);
+  const forbids = criterionOperator(criterion) === "must_not_be";
+  if (values.length > 1) {
+    const list = values.map((v) => displayValue(criterion.dimension, v)).join(", ");
+    return forbids ? `Will not accept any of: ${list}` : `Wants one of: ${list}`;
+  }
+  const phrase = valuePhrase(criterion.dimension, values[0]);
+  return forbids ? `Will not accept ${phrase}` : `Wants ${phrase}`;
+}
+
+// The same thing as a full sentence.
+function criterionSentence(criterion) {
+  const summary = criterionSummary(criterion);
+  if (!summary) return "";
+  return summary.startsWith("Will not")
+    ? `The client ${summary.charAt(0).toLowerCase() + summary.slice(1)}.`
+    : `The client ${summary.charAt(0).toLowerCase() + summary.slice(1)}.`;
+}
+
 // The plain-English reason a finding appeared. It names the client's criterion,
-// the direction it runs in, and the candidate's value, so nothing on the card
-// has to be taken on trust.
+// the direction it runs in, the candidate's value, and where each came from, so
+// nothing on the card has to be taken on trust.
 function findingSentence(f) {
   const label = dimensionLabel(f.dimension);
+  const noun = dimensionNoun(f.dimension);
 
   if (f.type === "contradiction") {
-    return `The client rejected on ${label} before and accepted someone with it afterwards, so the file disagrees with itself.`;
+    // A decision that does not agree with what the client has on file. Both
+    // are stated, and nothing here decides what they really meant.
+    const decisions = f.decisions || [];
+    const first = decisions[0];
+    if (!first) return `What the client has on file about ${noun} does not agree with a decision they made.`;
+    const when = new Date(first.at).toISOString().slice(0, 10);
+    const what = first.kind === "accepted" ? "accepted" : "turned down";
+    return `${criterionSentence(f.criterion)} They ${what} ${first.candidateName} on ${when}, whose profile listed: ${first.value}. Those two do not agree, and only the client can say which is right.`;
   }
   if (f.type === "repeat") {
     const n = f.rejections ? f.rejections.length : 0;
-    return `The client has rejected on ${label} ${n} time${n === 1 ? "" : "s"} before.${f.note ? " " + f.note + "." : ""} This is a pattern, not a rule.`;
+    return `The client has turned down ${n} profile${n === 1 ? "" : "s"} over ${noun}. That is a record of what happened, not proof of why.${f.note ? " " + f.note + "." : ""}`;
   }
 
   const criterion = f.criterion || null;
   const values = criterion ? criterionValues(criterion) : [];
-  const op = criterion ? operatorFor(criterion) : OPERATORS.must_be;
   const kind = criterion ? KIND_LABEL[criterion.kind] : "criterion";
-  const what = `${label} ${op.explain(values)}`;
 
   if (f.value === null || f.value === undefined) {
     if (f.reason === "history") {
-      return `The client has rejected on ${label} before, and this candidate's ${label.toLowerCase()} is not recorded, so it could not be checked.`;
+      return `The client has rejected profiles because of ${noun} before, and this candidate's profile does not say. It could not be checked.`;
     }
-    return `The client has a ${kind}: ${what}. This candidate's ${label.toLowerCase()} is not recorded, so it could not be checked.`;
+    return `The client has a ${kind} about ${noun}. This candidate's profile does not say, so it could not be checked.`;
   }
-  if (f.basis === "confirmed_dealbreaker") {
-    return `The client confirmed a dealbreaker: ${what}. This candidate is ${f.value}.`;
-  }
-  if (f.basis === "confirmed_preference") {
-    return `The client confirmed a preference: ${what}. This candidate is ${f.value}.`;
-  }
-  if (f.basis === "stated_preference") {
-    return `The client has a stated preference: ${what}. This candidate is ${f.value}.`;
-  }
-  return `On ${label}, this candidate is ${f.value}.`;
+  return `${criterionSentence(criterion)} This candidate's profile lists: ${f.value}.`;
 }
 
 // The dimensions an acceptance spoke for. An acceptance may name one dimension
@@ -188,10 +262,96 @@ function criteriaAt(store, clientId, at) {
   return byDimension;
 }
 
+// The decisions the client has made on a dimension, with the value the profile
+// carried at the time. An acceptance or a rejection is evidence that it
+// happened, not evidence of why.
+function historicalDecisions(store, clientId, dimension) {
+  const out = [];
+  for (const a of store.acceptances(clientId)) {
+    if (!acceptanceDimensions(store, a).includes(dimension)) continue;
+    const cand = store.candidate(a.candidateId);
+    out.push({
+      kind: "accepted",
+      candidateId: a.candidateId,
+      candidateName: cand ? cand.name : a.candidateId,
+      value: candidateValue(cand, dimension),
+      at: a.acceptedAt,
+    });
+  }
+  for (const r of store.rejections(clientId)) {
+    if (r.dimension !== dimension) continue;
+    const cand = store.candidate(r.candidateId);
+    out.push({
+      kind: "rejected",
+      candidateId: r.candidateId,
+      candidateName: cand ? cand.name : r.candidateId,
+      value: candidateValue(cand, dimension),
+      at: r.recordedAt,
+      severity: r.severity,
+    });
+  }
+  return out;
+}
+
+// The decisions that do not agree with a criterion the client has on file.
+//
+// Two conditions, both needed.
+//
+// The decision has to come after the criterion. A decision made before the
+// client said anything cannot contradict it, because the criterion was often
+// formed out of those very decisions.
+//
+// And the decision has to be about the same thing. An acceptance breaks the
+// criterion if the profile does not meet it. A rejection breaks it only if the
+// matchmaker wrote down that dimension as the reason, and the profile met the
+// criterion anyway: they turned down someone who did meet their own rule.
+//
+// Either way the file and the behaviour do not line up, and only the client can
+// say which is right.
+function decisionsAgainstCriterion(store, clientId, dimension, criterion) {
+  const since = new Date(criterion.recordedAt || criterion.confirmedAt || 0).getTime();
+  const out = [];
+
+  for (const a of store.acceptances(clientId)) {
+    if (new Date(a.acceptedAt).getTime() < since) continue;
+    const cand = store.candidate(a.candidateId);
+    const value = candidateValue(cand, dimension);
+    if (value === null || value === undefined) continue;
+    if (criterionVerdict(criterion, value) !== "violated") continue;
+    out.push({
+      kind: "accepted",
+      candidateId: a.candidateId,
+      candidateName: cand ? cand.name : a.candidateId,
+      value,
+      at: a.acceptedAt,
+    });
+  }
+
+  for (const r of store.rejections(clientId)) {
+    if (r.dimension !== dimension) continue;
+    if (new Date(r.recordedAt).getTime() < since) continue;
+    const cand = store.candidate(r.candidateId);
+    const value = candidateValue(cand, dimension);
+    if (value === null || value === undefined) continue;
+    if (criterionVerdict(criterion, value) !== "satisfied") continue;
+    out.push({
+      kind: "rejected",
+      candidateId: r.candidateId,
+      candidateName: cand ? cand.name : r.candidateId,
+      value,
+      at: r.recordedAt,
+      severity: r.severity,
+    });
+  }
+
+  return out;
+}
+
 // Evidence from earlier acceptances on the same dimension. This is a pattern,
 // not a match, so it is labelled as such.
-function acceptanceEvidence(store, clientId, candidate) {
+function acceptanceEvidence(store, clientId, candidate, criteria) {
   const candidateDims = candidateDimensions(candidate);
+  const onFile = criteria || new Map();
   const out = [];
   for (const d of candidateDims) {
     const acc = store
@@ -200,12 +360,22 @@ function acceptanceEvidence(store, clientId, candidate) {
       .sort((a, b) => new Date(b.acceptedAt) - new Date(a.acceptedAt))[0];
     if (acc) {
       const cand = store.candidate(acc.candidateId);
-      out.push({
-        dimension: d,
-        source: "observed_acceptance",
-        detail: cand ? cand.name : null,
-        acceptedAt: acc.acceptedAt,
-      });
+      // An acceptance is only evidence in the client's favour if it does not
+      // disagree with what they have on file. If it does, it is a contradiction
+      // to look into, and it is shown as that.
+      const against = onFile.get(d);
+      const value = candidateValue(cand, d);
+      const conflicts =
+        against && value !== null && criterionVerdict(against, value) === "violated";
+      if (!conflicts) {
+        out.push({
+          dimension: d,
+          source: "observed_acceptance",
+          detail: cand ? cand.name : null,
+          value: candidateValue(cand, d),
+          acceptedAt: acc.acceptedAt,
+        });
+      }
     }
   }
   return out;
@@ -252,18 +422,30 @@ function evaluateSend(store, clientId, candidate, at) {
   const codedRejections = rejections.filter((r) => r.dimension);
   const candidateDims = candidateDimensions(candidate);
 
+  // An observation is a hypothesis. It is not something a profile can be
+  // checked against, so it never makes a client count as having criteria.
+  const observationsOnFile = Array.from(criteria.values()).filter((c) => c.kind === "observation");
+  const applicableCriteria = Array.from(criteria.values()).filter(
+    (c) => c.kind !== "observation"
+  );
+
   if (candidateDims.length === 0) {
-    return { state: "untagged", findings: [], positive: [] };
+    return { state: "untagged", findings: [], positive: [], observations: [] };
   }
-  if (rejections.length === 0 && criteria.size === 0) {
-    return { state: "no_history", findings: [], positive: [] };
+  if (rejections.length === 0 && applicableCriteria.length === 0) {
+    // Nothing to compare against. A file holding only observations is in the
+    // same position as an empty one, and neither is a clean result.
+    return observationsOnFile.length
+      ? { state: "no_criteria", findings: [], positive: [], observations: observationsOnFile }
+      : { state: "no_history", findings: [], positive: [], observations: [] };
   }
-  if (rejections.length > 0 && codedRejections.length === 0 && criteria.size === 0) {
-    return { state: "uncoded_only", findings: [], positive: [] };
+  if (rejections.length > 0 && codedRejections.length === 0 && applicableCriteria.length === 0) {
+    return { state: "uncoded_only", findings: [], positive: [], observations: observationsOnFile };
   }
 
   const findings = [];
   const positive = [];
+  const observations = [];
   // A criterion with no values carries no constraint. It is skipped rather
   // than treated as a violation, so a malformed record cannot invent findings.
   const usable = new Map(
@@ -294,15 +476,26 @@ function evaluateSend(store, clientId, candidate, at) {
     };
 
     // 1. A criterion the client has on file.
-    if (criterion) {
+    //
+    //    An observation is a matchmaker's hypothesis. It is shown as context
+    //    and it can be put to the client, but it never excludes a candidate,
+    //    because the client has not said it.
+    if (criterion && isObservation(criterion)) {
+      observations.push(Object.assign({}, criterion, { summary: criterionSummary(criterion) }));
+    } else if (criterion) {
       const op = operatorFor(criterion);
       const verdict = criterionVerdict(criterion, value);
 
       if (verdict === "unknown") {
         // The criterion travels with the finding, so the sentence can name what
         // could not be checked.
-        findings.push(Object.assign({}, missingAgainstCriterion, { criterion }));
-        positive.push(...positiveEvidence(store, clientId, candidate, new Map([[dim, criterion]])));
+        findings.push(
+          Object.assign({}, missingAgainstCriterion, {
+            criterion,
+            tier: criterionTier(criterion),
+            tierLabel: TIER_HEADLINE[criterionTier(criterion)],
+          })
+        );
       } else if (verdict === "violated") {
         // How firm the criterion is decides how the finding is reported, not
         // which way the comparison runs.
@@ -310,6 +503,8 @@ function evaluateSend(store, clientId, candidate, at) {
         findings.push({
           type: hard ? "conflict" : "preference_mismatch",
           basis: criterion.kind,
+          tier: criterionTier(criterion),
+          tierLabel: TIER_HEADLINE[criterionTier(criterion)],
           dimension: dim,
           value,
           criterion,
@@ -321,15 +516,36 @@ function evaluateSend(store, clientId, candidate, at) {
       }
     }
 
-    // 2. Rejection history on this dimension.
+    // 2. A decision that does not agree with what the client has on file.
     //
-    //    A criterion governs the dimension it is on, so plain prior-rejection
-    //    history does not fire there. Two things still do: a client who
-    //    rejected after settling the dimension, which is new evidence against
-    //    a rule they have just confirmed; and a file that disagrees with
-    //    itself, having rejected on a dimension and then accepted on it.
-    //    History only fires where the candidate carries a value, because a
-    //    candidate with nothing recorded on a dimension cannot conflict on it.
+    //    This is the only kind of contradiction worth raising. Accepting someone
+    //    once and rejecting someone else once is not a contradiction, because
+    //    either decision could have been about something else entirely. A
+    //    contradiction is a decision that breaks, or ignores, a criterion the
+    //    client has actually stated.
+    if (criterion && !isObservation(criterion)) {
+      const inconsistent = decisionsAgainstCriterion(store, clientId, dim, criterion);
+      if (inconsistent.length) {
+        findings.push({
+          type: "contradiction",
+          basis: "history",
+          tier: criterionTier(criterion),
+          tierLabel: TIER_HEADLINE[criterionTier(criterion)],
+          dimension: dim,
+          value,
+          criterion,
+          decisions: inconsistent,
+        });
+      }
+    }
+
+    // 3. Rejection history on this dimension.
+    //
+    //    Where the client has a criterion, the criterion is their stated
+    //    position and this history does not fire against it. It is still worth
+    //    showing on a dimension with nothing on file, and where the client has
+    //    confirmed a preference and then rejected on it anyway, because that is
+    //    new evidence against a rule they have just confirmed.
     if (rejs.length > 0) {
       const settled = criterion && criterion.kind === "confirmed_preference";
       const settledAt = settled ? new Date(criterion.confirmedAt || criterion.recordedAt) : null;
@@ -342,38 +558,35 @@ function evaluateSend(store, clientId, candidate, at) {
           type: "repeat",
           basis: "history",
           dimension: dim,
+          value,
           severity: postSettlement[postSettlement.length - 1].severity,
           rejections: postSettlement,
-          note: "The client rejected this again after settling it",
+          note: "The client turned this down again after confirming it",
         });
-      } else if (!settled) {
-        const laterAcceptance = hasValue
-          ? acceptanceAfter(store, clientId, dim, rejs[0].recordedAt)
-          : false;
-        if (laterAcceptance) {
-          findings.push({ type: "contradiction", basis: "history", dimension: dim, rejections: rejs });
-        } else if (!criterion) {
-          if (!hasValue) {
-            // The client rejected on this dimension before, and we cannot check
-            // this candidate against it, because we do not know its value.
-            if (!findings.some((f) => f.type === "incomplete" && f.dimension === dim)) {
-              findings.push(missingAgainstHistory);
-            }
-          } else {
-            findings.push({
-              type: "repeat",
-              basis: "history",
-              dimension: dim,
-              severity: rejs[rejs.length - 1].severity,
-              rejections: rejs,
-            });
+      } else if (!settled && !criterion) {
+        if (!hasValue) {
+          // The client rejected on this dimension before, and we cannot check
+          // this candidate against it, because we do not know its value.
+          if (!findings.some((f) => f.type === "incomplete" && f.dimension === dim)) {
+            findings.push(missingAgainstHistory);
           }
+        } else {
+          findings.push({
+            type: "repeat",
+            basis: "history",
+            dimension: dim,
+            value,
+            severity: rejs[rejs.length - 1].severity,
+            rejections: rejs,
+          });
         }
       }
     }
   }
 
-  const positiveEvidenceList = positive.concat(acceptanceEvidence(store, clientId, candidate));
+  const positiveEvidenceList = positive.concat(
+    acceptanceEvidence(store, clientId, candidate, criteria)
+  );
 
   // Every finding carries the sentence that explains it, so the interface
   // never has to reconstruct the reasoning.
@@ -382,20 +595,33 @@ function evaluateSend(store, clientId, candidate, at) {
   }
 
   if (findings.length === 0) {
-    return { state: "clean", findings: [], positive: positiveEvidenceList };
+    return { state: "clean", findings: [], positive: positiveEvidenceList, observations };
   }
 
   findings.sort((a, b) => SEVERITY_RANK[a.type] - SEVERITY_RANK[b.type]);
-  return { state: findings[0].type, findings, positive: positiveEvidenceList };
+  return {
+    state: findings[0].type,
+    findings,
+    positive: positiveEvidenceList,
+    observations,
+  };
 }
 
 module.exports = {
   evaluateSend,
   criteriaAt,
+  isObservation,
+  isConfirmed,
+  criterionTier,
+  TIER_HEADLINE,
+  historicalDecisions,
+  decisionsAgainstCriterion,
   criterionValues,
   criterionOperator,
   criterionVerdict,
   criterionExplanation,
+  criterionSummary,
+  criterionSentence,
   findingSentence,
   candidateDimensions,
   candidateValue,
@@ -406,4 +632,6 @@ module.exports = {
   SEVERITY_RANK,
   OPERATORS,
   KIND_LABEL,
+  FINDING_HEADLINE,
+  KIND_HEADLINE,
 };

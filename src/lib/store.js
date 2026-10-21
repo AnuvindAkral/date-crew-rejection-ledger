@@ -3,7 +3,12 @@
 const fs = require("node:fs");
 
 const { DIMENSION_BY_KEY, dimensionValues } = require("./dimensions");
-const { evaluateSend, criteriaAt } = require("./rules");
+const {
+  evaluateSend,
+  criteriaAt,
+  criterionSummary,
+  decisionsAgainstCriterion,
+} = require("./rules");
 
 const DAY = 86400000;
 
@@ -55,7 +60,7 @@ function buildSeed(now = Date.now()) {
     { id: "cand1", name: "Rohit K.", city: "Mumbai", profession: "Engineering Manager", source: "internal_network", attributes: { location_city_tier: "Mumbai", profession_seniority: "Senior professional", smoking_habit: "Non-smoker" } },
     { id: "cand2", name: "Vikram J.", city: "Jaipur", profession: "Product Lead", source: "matrimonial", attributes: { location_city_tier: "Tier 2 city", smoking_habit: "Occasional smoker" } },
     { id: "cand3", name: "Aditya R.", city: "Chennai", profession: "Data Scientist", source: "linkedin", attributes: { location_city_tier: "Other metro", education: "Top-tier college" } },
-    { id: "cand4", name: "Arjun T.", city: "Bangalore", profession: "Founder", source: "referral", attributes: { location_city_tier: "Bangalore metro", personality_temperament: "Calm", smoking_habit: "Non-smoker" } },
+    { id: "cand4", name: "Arjun T.", city: "Bangalore", profession: "Founder", source: "referral", attributes: { location_city_tier: "Bangalore metro", personality_temperament: "Calm", smoking_habit: "Regular smoker" } },
     { id: "cand5", name: "Aarav M.", city: "Pune", profession: "Product Manager", source: "internal_network", attributes: { location_city_tier: "Pune", personality_temperament: "Outgoing", smoking_habit: "Non-smoker" } },
     { id: "cand6", name: "Karan D.", city: "Bangalore", profession: "Consultant", source: "referral", attributes: { location_city_tier: "Bangalore metro", smoking_habit: "Non-smoker" } },
     { id: "cand7", name: "Nikhil S.", city: "Mumbai", profession: "Trader", source: "matrimonial", attributes: { diet_lifestyle: "Non-vegetarian", smoking_habit: "Non-smoker" } },
@@ -84,6 +89,9 @@ function buildSeed(now = Date.now()) {
     { id: "p4", clientId: "c2", dimension: "education", operator: "must_be", values: ["Top-tier college"], kind: "stated_preference", confirmed: false, status: "active", note: "Prefers a top-tier college", source: "onboarding", recordedAt: daysAgo(now, 50), recordedBy: "Aisha Verma" },
     { id: "p5", clientId: "c2", dimension: "smoking_habit", operator: "must_be", values: ["Non-smoker"], kind: "confirmed_preference", confirmed: true, status: "active", note: "Would prefer a non-smoker", source: "onboarding", recordedAt: daysAgo(now, 50), confirmedAt: daysAgo(now, 50), recordedBy: "Aisha Verma" },
     { id: "p6", clientId: "c4", dimension: "values_intent", operator: "must_be", values: ["Wants children"], kind: "stated_preference", confirmed: false, status: "active", note: "Wants to have children", source: "onboarding", recordedAt: daysAgo(now, 45), recordedBy: "Farhan Qureshi" },
+    // A pattern the matchmaker noticed, not something the client said. It is
+    // recorded as a hypothesis, and it never rules a profile out on its own.
+    { id: "p7", clientId: "c1", dimension: "personality_temperament", operator: "must_be", values: ["Calm", "Reserved"], kind: "observation", confirmed: false, status: "active", note: "She has twice said she likes someone calm and steady", source: "matchmaker_note", recordedAt: daysAgo(now, 12), recordedBy: "Aisha Verma" },
   ];
 
   const rejections = [
@@ -293,6 +301,28 @@ function createStore(initial) {
     audits() {
       return state.audits;
     },
+    // The places where the client's file does not agree with a decision they
+    // made. This is the client's own inconsistency, not anything about a
+    // particular profile, so it is worked out for the client as a whole.
+    clientContradictions(clientId) {
+      const out = [];
+      for (const criterion of store.activeCriteria(clientId)) {
+        if (criterion.kind === "observation") continue;
+        const decisions = decisionsAgainstCriterion(
+          store,
+          clientId,
+          criterion.dimension,
+          criterion
+        );
+        if (!decisions.length) continue;
+        out.push({
+          dimension: criterion.dimension,
+          criterion: Object.assign({}, criterion, { summary: criterionSummary(criterion) }),
+          decisions,
+        });
+      }
+      return out;
+    },
     auditsFor(clientId) {
       return state.audits.filter((a) => a.clientId === clientId);
     },
@@ -398,7 +428,12 @@ function createStore(initial) {
       if (!DIMENSION_BY_KEY[dimension]) {
         throw new InputError("Pick a dimension.", "dimension");
       }
-      const kinds = ["confirmed_dealbreaker", "confirmed_preference", "stated_preference"];
+      const kinds = [
+        "confirmed_dealbreaker",
+        "confirmed_preference",
+        "stated_preference",
+        "observation",
+      ];
       const chosen = kinds.indexOf(kind) === -1 ? "stated_preference" : kind;
       // With no operator given, a dealbreaker forbids the value and a
       // preference requires it. This is the same reading the migration applies
@@ -423,6 +458,18 @@ function createStore(initial) {
       }
       const now = nowIso();
 
+      // A confirmed rule has to be backed by something the client said. Either
+      // the answer was recorded from the client, or the matchmaker wrote down
+      // what the client said. Without one of those, what the matchmaker has is
+      // an inference, and it is recorded as an observation instead.
+      const isConfirmed = chosen === "confirmed_dealbreaker" || chosen === "confirmed_preference";
+      if (isConfirmed && source !== "client_answer" && !(typeof note === "string" && note.trim())) {
+        throw new InputError(
+          "A confirmed criterion needs the client's own words, or an answer recorded from the client. Record it as an observation to check if it is only a pattern you noticed.",
+          "note"
+        );
+      }
+
       const existing = store.activeCriteria(clientId).find((c) => c.dimension === dimension);
       const before = existing
         ? {
@@ -444,7 +491,7 @@ function createStore(initial) {
         operator: op,
         values: list,
         kind: chosen,
-        confirmed: chosen !== "stated_preference",
+        confirmed: isConfirmed,
         status: "active",
         note: typeof note === "string" ? note.trim() : "",
         source: source || "onboarding",
@@ -452,7 +499,7 @@ function createStore(initial) {
         recordedBy: actor || null,
         supersedes: existing ? existing.id : null,
       };
-      if (chosen !== "stated_preference") rec.confirmedAt = now;
+      if (isConfirmed) rec.confirmedAt = now;
       state.preferences.push(rec);
 
       state.preferenceEvents.push({
@@ -538,6 +585,25 @@ function createStore(initial) {
     },
 
     share({ clientId, candidateId, actor, consultedInsightIds }) {
+      // A profile already sent to this client, with no answer yet, is the same
+      // introduction. Sending it again is almost always a double click, and it
+      // would double count the profile in the measurement.
+      const earlier = state.shares.find(
+        (s) => s.clientId === clientId && s.candidateId === candidateId
+      );
+      if (earlier) {
+        const answered =
+          state.rejections.some(
+            (r) => r.clientId === clientId && r.candidateId === candidateId
+          ) ||
+          state.acceptances.some(
+            (a) => a.clientId === clientId && a.candidateId === candidateId
+          );
+        if (!answered) {
+          log("duplicate_share_ignored", { clientId, candidateId, actor });
+          return Object.assign({}, earlier, { duplicate: true });
+        }
+      }
       // Only insights that exist and belong to this client may be cited.
       const valid = new Set(state.insights.filter((i) => i.clientId === clientId).map((i) => i.id));
       const consulted = Array.isArray(consultedInsightIds)
@@ -585,14 +651,29 @@ function createStore(initial) {
       const soft = criterionFindings.filter((f) => f.basis !== "confirmed_dealbreaker");
       const unknown = review.findings.filter((f) => f.basis === "unknown");
       const history = review.findings.filter((f) => f.basis === "history");
+      // The criteria that were in force at the time. A profile with nothing
+      // recorded at all cannot be checked against any of them, so every one of
+      // them counts as unchecked.
+      const criteriaInForce = criteriaAt(store, share.clientId, share.sharedAt);
+      // An observation is a hypothesis, not something to check a profile
+      // against. A client whose only record is an observation has nothing to
+      // compare against, and must not be counted as a clean result.
+      const applicableCriteria = [...criteriaInForce.values()].filter(
+        (c) => c.kind !== "observation"
+      );
+      const hadCriteria = applicableCriteria.length > 0;
+      const untagged = review.state === "untagged";
+      const unknownCount = unknown.length + (untagged ? applicableCriteria.length : 0);
 
       const classification = hard.length
         ? "hard_conflict"
         : soft.length
           ? "soft_mismatch"
-          : unknown.length
+          : unknownCount > 0
             ? "unknown"
-            : "clean";
+            : hadCriteria
+              ? "clean"
+              : "no_criteria";
 
       const rec = {
         id: id("aud"),
@@ -604,7 +685,7 @@ function createStore(initial) {
         classification,
         hard: hard.length,
         soft: soft.length,
-        unknown: unknown.length,
+        unknown: unknownCount,
         history: history.length,
         details: criterionFindings.map((f) => ({
           type: f.type,
@@ -690,6 +771,26 @@ function createStore(initial) {
     },
 
     accept({ clientId, candidateId, actor, dimensions, surprise }) {
+      // The client said yes, so the profile was sent. If no share was recorded
+      // for it, it still has to be in the denominator.
+      const shared = state.shares.some(
+        (s) => s.clientId === clientId && s.candidateId === candidateId
+      );
+      if (!shared) {
+        const cand = store.candidate(candidateId);
+        const review = cand ? evaluateSend(store, clientId, cand) : null;
+        const share = {
+          id: id("shr"),
+          clientId,
+          candidateId,
+          sharedAt: nowIso(),
+          actor,
+          consultedInsightIds: [],
+          check: summariseCheck(review),
+        };
+        state.shares.push(share);
+        store.auditShare({ shareId: share.id, by: actor });
+      }
       const rec = { id: id("acc"), clientId, candidateId, acceptedAt: nowIso() };
       state.acceptances.push(rec);
       // The acceptance debrief: capture what mattered and what surprised, only if
@@ -733,15 +834,19 @@ function createStore(initial) {
       return rec;
     },
 
-    recordClientAnswer({ clientId, dimension, answer, value, verbatim, actor }) {
+    recordClientAnswer({ clientId, dimension, answer, value, values, operator, kind, verbatim, actor }) {
       const now = nowIso();
+      const list = (Array.isArray(values) ? values : value ? [value] : []).filter(Boolean);
       const rec = {
         id: id("cnf"),
         clientId,
         dimension,
-        question: "Is this a dealbreaker or a preference?",
+        question: "What did the client say about this?",
         answer,
-        value: value || null,
+        value: list[0] || null,
+        values: list,
+        operator: operator || null,
+        kind: kind || null,
         verbatim: verbatim || "",
         recordedAt: now,
         recordedBy: actor,
@@ -752,9 +857,16 @@ function createStore(initial) {
       // words. The direction follows what the client settled: a dealbreaker
       // forbids the value they rejected, a preference requires the value they
       // accepted.
-      if ((answer === "dealbreaker" || answer === "preference") && value && verbatim && verbatim.trim()) {
-        const kind = answer === "dealbreaker" ? "confirmed_dealbreaker" : "confirmed_preference";
-        const operator = answer === "dealbreaker" ? "must_not_be" : "must_be";
+      if (
+        (answer === "dealbreaker" || answer === "preference") &&
+        list.length &&
+        verbatim &&
+        verbatim.trim()
+      ) {
+        const kindToUse =
+          kind || (answer === "dealbreaker" ? "confirmed_dealbreaker" : "confirmed_preference");
+        const opToUse =
+          operator || (answer === "dealbreaker" ? "must_not_be" : "must_be");
         const existing = store.activeCriteria(clientId).find((c) => c.dimension === dimension);
         const before = existing
           ? { operator: existing.operator, values: existing.values, kind: existing.kind, note: existing.note || "" }
@@ -767,12 +879,12 @@ function createStore(initial) {
           id: id("pref"),
           clientId,
           dimension,
-          operator,
-          values: [value],
-          kind,
+          operator: opToUse,
+          values: list,
+          kind: kindToUse,
           confirmed: true,
           status: "active",
-          note: "",
+          note: verbatim.trim(),
           source: "client_answer",
           recordedAt: now,
           confirmedAt: now,
@@ -785,7 +897,7 @@ function createStore(initial) {
           clientId,
           dimension,
           before,
-          after: { operator, values: [value], kind, note: "" },
+          after: { operator: opToUse, values: list, kind: kindToUse, note: verbatim.trim() },
           at: now,
           by: actor || null,
           source: "client_answer",

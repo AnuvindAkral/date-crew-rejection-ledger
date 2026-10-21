@@ -34,8 +34,16 @@ function emptyBucket() {
     conflictShares: 0,
     hardConflictShares: 0,
     softMismatchShares: 0,
+    // Could not be judged at all: a criterion existed and the candidate's value
+    // was not recorded.
     unknownShares: 0,
+    // The client had nothing on file, so there was nothing to compare against.
+    // This is not a clean result.
+    noCriteriaShares: 0,
     cleanShares: 0,
+    // At least one attribute was missing, whether or not there was also a
+    // conflict. Kept apart so partial information stays visible.
+    withMissingInformation: 0,
     confirmedAudits: 0,
     confirmedConflictShares: 0,
     historyFindings: 0,
@@ -117,9 +125,14 @@ function computeOutcomeMetrics(store) {
         b.softMismatchShares += 1;
       } else if (audit.classification === "unknown") {
         b.unknownShares += 1;
+      } else if (audit.classification === "no_criteria") {
+        b.noCriteriaShares += 1;
       } else {
         b.cleanShares += 1;
       }
+      // Missing information is counted on its own, so a profile that had both a
+      // conflict and an unrecorded attribute still shows the gap.
+      if ((audit.unknown || 0) > 0) b.withMissingInformation += 1;
       if (audit.humanConfirmed === true) {
         b.confirmedAudits += 1;
         if (audit.classification === "hard_conflict" || audit.classification === "soft_mismatch") {
@@ -164,6 +177,20 @@ function computeOutcomeMetrics(store) {
   }
   const overridesWithReason = overrides.filter((o) => o.reason && o.reason.trim()).length;
 
+  // The numbers the dashboard shows, in the words the dashboard uses them in.
+  // The same underlying figures, named for a matchmaker rather than a
+  // measurement team.
+  const plain = (b) => ({
+    sent: b.shares,
+    issues: b.conflictShares,
+    dealbreakers: b.hardConflictShares,
+    mismatches: b.softMismatchShares,
+    missingInformation: b.withMissingInformation,
+    noConflicts: b.cleanShares,
+    nothingToCompare: b.noCriteriaShares,
+    couldNotJudge: b.unknownShares,
+  });
+
   return {
     window: {
       pilotStart: store.state.meta.pilotStart,
@@ -172,6 +199,12 @@ function computeOutcomeMetrics(store) {
       measurement: finalise(buckets[PERIOD_MEASUREMENT].intervention),
       measurementControl: finalise(buckets[PERIOD_MEASUREMENT].control),
       overall: finalise(all),
+    },
+    headline: {
+      current: plain(buckets[PERIOD_MEASUREMENT].intervention),
+      before: plain(buckets[PERIOD_BASELINE].intervention),
+      checkedBeforeSending: adoption.intervention.checked,
+      eligibleToCheck: adoption.intervention.eligible,
     },
     adoption: {
       intervention: {

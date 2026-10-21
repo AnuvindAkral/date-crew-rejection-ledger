@@ -2,6 +2,16 @@
 
 What the pilot would measure, and why it is built the way it is. The implementation is in `src/lib/metrics.js`, in `computeOutcomeMetrics`.
 
+## The rule the measurement rests on
+
+> A client's explicit answer establishes their preference. Historical behaviour is context, not proof. A matchmaker's inference is a hypothesis, not a confirmed rule.
+
+The measurement follows the same rule the check does, because a metric that counted history as preference would be measuring the matchmaker's memory rather than the client's file.
+
+- **Only what the client confirmed or stated is audited.** An observation is a hypothesis. It never fires a finding, so it never produces a conflict, so it never changes a rate.
+- **A contradiction is a decision that disagrees with a criterion on file.** It is a finding in its own right, shown with both sides, and it decides nothing. It is not the old "rejected once then accepted once" pattern, which is history rather than a disagreement, and which is not audited as a conflict.
+- **A decision made before the criterion existed cannot contradict it.** The audit reads the criteria that were in force at the moment of the share, and a decision that predates a criterion is where the criterion came from, not a disagreement with it.
+
 ## The problem this is solving
 
 The first version of this measurement was the conflict rate among the profiles a matchmaker chose to check. It was wrong in a way that only shows up when you ask how to game it. A matchmaker who stops using the checker has fewer checked profiles, and if the rate is computed over checked profiles, the number can improve by the matchmaker doing less.
@@ -17,7 +27,8 @@ Reporting coverage alongside the rate does not fix that. Coverage is a second nu
 | **Denominator** | Every profile shared in the period. Not every profile checked, not every profile recommended, and not every rejection. |
 | **Numerator** | Profiles whose audit found at least one violated criterion. |
 | **Conflict classification** | **Hard**: a confirmed dealbreaker was violated. **Soft**: a confirmed or stated preference was violated. A profile that breaks both is counted under the firmer one, so the two components are disjoint and add up to the numerator. |
-| **Unknown** | A criterion could not be checked because the candidate's value is not recorded. Counted in the denominator and reported on its own row. Never counted as clean. |
+| **Missing information** | A criterion could not be checked because the candidate's value is not recorded. Counted in the denominator and reported on its own row. Never counted as clean. Measured independently of whether there was also a conflict, so a profile with a confirmed dealbreaker broken **and** an unrecorded attribute is counted as a hard conflict and as a profile with missing information. |
+| **Nothing to compare against** (`no_criteria`) | The client had no criterion that a profile could be checked against at the time, so there was nothing to check. That includes a client whose only record is an observation, because a hypothesis is not something to check a profile against. Counted in the denominator and reported on its own row. This is not a clean result, and it is not a conflict either. |
 | **Measurement window** | Fourteen days from the pilot start. The window is recorded in `meta.pilotStart`. |
 | **Audit process** | Every share is re-evaluated after the fact against the criteria that were in force at that moment, by the same deterministic rules, whichever arm the client is on and whether or not the card was ever opened. |
 
@@ -57,6 +68,18 @@ The reason is that adoption is the thing that can move on its own. A primary rat
 
 A card view is recorded when the matchmaker opens the card, and it carries whether the check was on it. The control arm records card views with the check suppressed, so its adoption is zero by design rather than by neglect.
 
+## What each measure counts
+
+Every measure counts **profiles**, not criteria or attributes. A profile with three unrecorded attributes is one profile with missing information, not three. The denominator is always the profiles sent in the period, and every measure says so where it is shown.
+
+A profile can be in more than one bucket. A profile with a confirmed dealbreaker broken and a second criterion that could not be checked is counted as a hard conflict **and** as a profile with missing information. The two are separate measures and the overlap is the point: the conflict is real, and there is also a gap in what could be checked.
+
+The same is true of "nothing to compare against". It is its own bucket, and a profile in it is never counted in the conflict rate or in the clean count.
+
+## The pooled figure
+
+`computeOutcomeMetrics` also returns a pooled figure across both groups. It is a description of the whole period and nothing more. It is not shown as a headline and it is not the result of either group, because pooling a treated and an untreated group tells you about the mixture rather than about either. The baseline, the intervention group and the control group are always shown apart.
+
 ## The diagnostics
 
 Reported alongside, never instead of:
@@ -66,7 +89,8 @@ Reported alongside, never instead of:
 | Confirmed dealbreaker conflicts reaching the client | The firmest category, and the one a client is most likely to be upset about |
 | Softer preference mismatches reaching the client | The larger and softer category, kept apart from the firm one |
 | Override rate, with reasons | A matchmaker who overrides every warning has a tool that is not working, and a tool that is not working should not be defended as a success. The reason is what makes the override reviewable |
-| Unknown coverage | How much of the period could not be judged at all, because a candidate value was not recorded |
+| Missing information | How many profiles had at least one value that was not recorded, whether or not there was also a conflict |
+| Nothing to compare against | How many profiles went to a client with no criterion on file. These are not clean results |
 | Per matchmaker and per client | For reading the result, with the caveat below |
 
 ## What the pilot would compare, and how
@@ -90,6 +114,8 @@ Any pilot would also be observational. Clients are not randomly assigned if the 
 | --- | --- |
 | The audit | `store.auditShare` and `store.runAudit` in `src/lib/store.js` |
 | The metric | `computeOutcomeMetrics` in `src/lib/metrics.js` |
+| The edge cases | `test/measurement-edges.test.js` |
+| The truth rule, through the store and the action layer | `test/truth.test.js` |
 | The operator view | The Measurement tab in `src/public/app.js` |
 | The tests | `test/measurement.test.js` |
 

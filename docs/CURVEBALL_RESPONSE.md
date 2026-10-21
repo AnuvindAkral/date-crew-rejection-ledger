@@ -42,11 +42,11 @@ The honest answer is that no metric on human behaviour is ungameable. This one a
 
 Correct, and the plan says so. The two-week pilot establishes feasibility: can matchmakers capture structured reasons at an 80% rate in ten seconds, does the ledger surface genuine contradictions, does the card change a decision, does matchmaker time stay flat. Causal proof that ARCR falls needs roughly 290 clients per arm and a real, longer run.
 
-The point of the prototype is to de-risk the measurement path before anyone spends that time and money. If the pilot shows the reject-then-accept pattern does not exist in TDC's population, the whole product is wrong and that is a cheap thing to learn. That is the value.
+The point of the prototype is to de-risk the measurement path before anyone spends that time and money. If the pilot shows clients' decisions never disagree with what they told us, the whole product is wrong and that is a cheap thing to learn. That is the value.
 
 **7. "Doesn't a client rejecting a profile and later accepting a similar one just mean the client is flaky?"**
 
-Possibly, and that is exactly why a rejection is treated as a question, never a rule. The card does not say "this client is inconsistent". It says "you rejected three profiles for this and accepted one with it, is it a dealbreaker or a preference?"
+Possibly, and that is exactly why a rejection is treated as a question, never a rule. The card does not say "this client is inconsistent". It says "you confirmed you will not accept a smoker, and you later accepted someone who smokes. Those two do not agree, and only the client can say which is right."
 
 That single question is the product. It converts noise into a settled rule with the client's own words, and then it stops asking. If the answer is genuinely "it depends", the matchmaker records "not sure" and holds, and nothing is written.
 
@@ -64,6 +64,6 @@ That is not a viral loop. It is the unglamorous growth a services business actua
 
 **10. "What would make you abandon this and pivot?"**
 
-If the two-week pilot shows no genuine reject-then-accept contradictions in TDC's population, the distinctive mechanism has no target and I would drop the ledger for the simpler fallback: ask, once, at the first rejection, whether a dimension is a dealbreaker or a preference. That needs no ledger and no history.
+If the two-week pilot shows no genuine contradictions in TDC's population, the distinctive mechanism has no target and I would drop the ledger for the simpler fallback: ask, once, at the first rejection, whether a dimension is a dealbreaker or a preference. That needs no ledger and no history.
 
 If matchmakers ignore the card, or clients report feeling processed, or a preference ever changes without the client's words, I would stop rather than ship a tool the humans in the loop do not trust.

@@ -8,10 +8,11 @@ The assessment of record is [`../ASSIGNMENT_SUBMISSION.md`](../ASSIGNMENT_SUBMIS
 | --- | --- |
 | [`../README.md`](../README.md) | The problem, the direction, what is built, how to run it, what is not implemented |
 | [`../ASSIGNMENT_SUBMISSION.md`](../ASSIGNMENT_SUBMISSION.md) | The answer to the brief, in the brief's structure and word limits |
-| [`DEMO_SCRIPT.md`](DEMO_SCRIPT.md) | The verified walkthrough, with what the screen shows at each beat |
+| [`DEMO_SCRIPT.md`](DEMO_SCRIPT.md) | The verified walkthrough: five sections, twenty numbered steps, and what the screen shows at each one |
 | [`PRODUCT_THINKING.md`](PRODUCT_THINKING.md) | The problem, the reasoning, the assumptions, and what would change the direction |
-| [`PRODUCT_DECISIONS.md`](PRODUCT_DECISIONS.md) | Each decision with its trade-off, the rejected alternative, and the feature classification |
-| [`MEASUREMENT_MODEL.md`](MEASUREMENT_MODEL.md) | The primary outcome, the adoption guardrail, the audit, and what a two-week pilot could and could not show |
+| [`PRODUCT_DECISIONS.md`](PRODUCT_DECISIONS.md) | Each decision with its trade-off, the rejected alternative, the feature classification, and how the direction moved from a rejection-ledger-first idea to the pre-send check |
+| [`MEASUREMENT_MODEL.md`](MEASUREMENT_MODEL.md) | The primary outcome, the adoption guardrail, the audit, the contradiction rule, and what a two-week pilot could and could not show |
+| [`TERMINOLOGY.md`](TERMINOLOGY.md) | The words the product uses, the company source of each one, and the plain-language labels the measurement view uses |
 | [`VALIDATION_PLAN.md`](VALIDATION_PLAN.md) | The assumptions that need a real matchmaker, and the cheapest way to test each |
 | [`AI_USAGE.md`](AI_USAGE.md) | The disclosure, both for the assistance used in producing this work and for the AI inside the product |
 | [`SUBMISSION_CHECKLIST.md`](SUBMISSION_CHECKLIST.md) | Where each required item lives and what is still outstanding |
@@ -27,7 +28,7 @@ The assessment of record is [`../ASSIGNMENT_SUBMISSION.md`](../ASSIGNMENT_SUBMIS
 | [`GATE_B_SITEMAP.md`](GATE_B_SITEMAP.md) | The intended screens, before they were built |
 | [`INTERVIEW_PROTOCOL.md`](INTERVIEW_PROTOCOL.md) | The five matchmaker conversations, prepared and unrun |
 | [`SOURCING_SCORECARD_GATE.md`](SOURCING_SCORECARD_GATE.md) | Why the sourcing scorecard is excluded rather than built weakly |
-| [`CURVEBALL_RESPONSE.md`](CURVEBALL_RESPONSE.md) | The curveball answer in more depth than the 200 words the brief allows |
+| [`CURVEBALL_RESPONSE.md`](CURVEBALL_RESPONSE.md) | Anticipated hard questions with answers written to be read aloud. It is not the curveball the brief asks for; that answer is Part 4 of the assessment |
 
 ## Review and audit
 

@@ -24,13 +24,13 @@ The criteria are compared as values, not as categories, because that is the diff
 
 ## The assumptions this rests on
 
-1. The reject-then-accept pattern, a client rejecting on a dimension and later accepting on it, exists in TDC's population. It comes from the supplied brief and the founder's writing, and it has not been measured.
+1. Clients' decisions sometimes disagree with what they told us. The brief reports a client rejecting a profile and later accepting a similar one, and the founder's writing is about rejections being the record of what matters. Neither has been counted. What the tool flags is a decision that disagrees with a criterion on file, not the reject-then-accept pattern itself.
 2. Acceptance carries information that rejection does not. This is the debrief's whole premise, and it is unproven.
 3. The debrief fits a real matchmaker's workflow without adding admin. A feature that becomes another form to fill will fail in practice regardless of how well it is designed.
 
 ## What would change the direction
 
-The five-conversation interview protocol in `docs/INTERVIEW_PROTOCOL.md` is the cheap test. If those conversations show that acceptance is not informative, the debrief is solving the wrong problem and the fix is surfacing existing information rather than capturing new information. If they show the information is already captured but not consulted, then capture is not the bottleneck at all. If the reject-then-accept pattern turns out not to exist, the contradiction card has no target and should go. If channel is not a meaningful axis to matchmakers, the sourcing scorecard stays excluded for good rather than being revisited.
+The five-conversation interview protocol in `docs/INTERVIEW_PROTOCOL.md` is the cheap test. If those conversations show that acceptance is not informative, the debrief is solving the wrong problem and the fix is surfacing existing information rather than capturing new information. If they show the information is already captured but not consulted, then capture is not the bottleneck at all. If clients' decisions never disagree with what they told us, the contradiction card has no target and should go. If channel is not a meaningful axis to matchmakers, the sourcing scorecard stays excluded for good rather than being revisited.
 
 Each of these is a finding that would change the product. None of them is hidden in the submission.
 

@@ -64,6 +64,19 @@ function applyAction(body) {
   const { type, payload } = body || {};
   const p = payload || {};
   const actor = resolveActor(p);
+  try {
+    return applyActionInner(type, p, actor);
+  } catch (err) {
+    if (err instanceof InputError) {
+      // A validation problem the matchmaker can fix. The message is written for
+      // them and names the field it belongs to.
+      return { error: "invalid_input", message: err.message, field: err.field };
+    }
+    throw err;
+  }
+}
+
+function applyActionInner(type, p, actor) {
   switch (type) {
     case "share":
       store.share({
@@ -108,6 +121,9 @@ function applyAction(body) {
         dimension: p.dimension,
         answer: p.answer,
         value: p.value,
+        values: p.values,
+        operator: p.operator,
+        kind: p.kind,
         verbatim: p.verbatim,
         actor,
       });
@@ -228,17 +244,6 @@ const server = http.createServer(async (req, res) => {
       }
       sendJson(res, 200, buildBootstrap(store));
     } catch (err) {
-      if (err instanceof InputError) {
-        // A validation problem the matchmaker can fix. The message is written
-        // for them, and names the field it belongs to.
-        //
-        // The status is 200 because the request itself was handled. A refusal
-        // is a normal answer to a form, and a local prototype should not fill
-        // the browser console with red errors every time someone types a
-        // duplicate name. The error field is what the interface reads.
-        sendJson(res, 200, { ok: false, error: "invalid_input", message: err.message, field: err.field });
-        return;
-      }
       console.error("action failed:", err);
       sendJson(res, 500, { error: "server_error", message: "Something went wrong saving that." });
     }
@@ -276,4 +281,12 @@ if (require.main === module) {
   });
 }
 
-module.exports = { server, applyAction, store };
+module.exports = {
+  server,
+  applyAction,
+  // A getter, because a reset replaces the store and an exported value would
+  // keep pointing at the old one.
+  get store() {
+    return store;
+  },
+};

@@ -15,19 +15,22 @@
     </div>
     <nav class="topnav">
       <button class="nav-btn" data-view="clients">Clients</button>
+      <button class="nav-btn" data-view="candidates">Candidates</button>
       <button class="nav-btn" data-view="measurement">Measurement</button>
     </nav>
     <div class="topbar-right">
-      <span class="matchmaker">Aisha V. · Matchmaker</span>
+      <label class="matchmaker-label" for="matchmaker-select">Acting as</label>
+      <select id="matchmaker-select" class="matchmaker-select" aria-label="Acting matchmaker"></select>
+      <button class="ghost-btn" id="manage-mm-btn" title="Add a matchmaker record">+ Matchmaker</button>
       <button class="ghost-btn" id="reset-btn">Reset demo</button>
     </div>
   </header>
 
   <main id="app" class="app" aria-live="polite"></main>
 
+  <div id="toast" class="toast-root" aria-live="polite"></div>
   <div id="modal-root"></div>
 
-  <template id="tmpl-client-row"></template>
   <script src="/app.js"></script>
 </body>
 </html>

@@ -70,21 +70,48 @@ test("a likely_dealbreaker rejection alone never becomes a hard conflict", () =>
     freeText: "misaligned values",
     actor: "aisha",
   });
-  const result = evaluateSend(store, "c3", { id: "x", dimensions: ["values_intent"] });
+  const result = evaluateSend(store, "c3", {
+    id: "x",
+    dimensions: ["values_intent"],
+    attributes: { values_intent: "Unsure about children" },
+  });
   assert.equal(result.state, "repeat");
+  assert.ok(!result.findings.some((f) => f.type === "conflict"));
 });
 
-test("client clarification to preference resolves a contradiction to clean", () => {
+test("a confirmed dealbreaker only fires when the candidate's value matches it", () => {
+  const store = fresh();
+  // Rahul's confirmed dealbreaker is Non-vegetarian.
+  const vegetarian = evaluateSend(store, "c2", {
+    id: "v",
+    dimensions: ["diet_lifestyle"],
+    attributes: { diet_lifestyle: "Vegetarian" },
+  });
+  assert.notEqual(vegetarian.state, "conflict");
+  const nonVeg = evaluateSend(store, "c2", {
+    id: "nv",
+    dimensions: ["diet_lifestyle"],
+    attributes: { diet_lifestyle: "Non-vegetarian" },
+  });
+  assert.equal(nonVeg.state, "conflict");
+});
+
+test("client clarification settles the contradiction on that dimension", () => {
   const store = fresh();
   store.recordClientAnswer({
     clientId: "c1",
     dimension: "location_city_tier",
     answer: "preference",
+    value: "Bangalore metro",
     verbatim: "Location is a preference, not a dealbreaker",
     actor: "aisha",
   });
   const result = evaluateSend(store, "c1", store.candidate("cand6"));
-  assert.equal(result.state, "clean");
+  // The contradiction on location is settled. What is left is the education
+  // history, and for Karan we do not know his education, so the finding is
+  // missing information rather than a repeat.
+  assert.ok(!result.findings.some((f) => f.type === "contradiction"));
+  assert.equal(result.state, "incomplete");
 });
 
 test("client clarification to dealbreaker turns a contradiction into a conflict", () => {
@@ -93,10 +120,12 @@ test("client clarification to dealbreaker turns a contradiction into a conflict"
     clientId: "c1",
     dimension: "location_city_tier",
     answer: "dealbreaker",
-    verbatim: "Location is a dealbreaker for me",
+    value: "Pune",
+    verbatim: "Pune is a dealbreaker for me",
     actor: "aisha",
   });
-  const result = evaluateSend(store, "c1", store.candidate("cand6"));
+  // Aarav is in Pune, and Pune is now a confirmed dealbreaker.
+  const result = evaluateSend(store, "c1", store.candidate("cand5"));
   assert.equal(result.state, "conflict");
 });
 
@@ -106,9 +135,11 @@ test("an uncertain clarification changes no preference and keeps the contradicti
     clientId: "c1",
     dimension: "location_city_tier",
     answer: "uncertain",
+    value: null,
+    verbatim: "",
     actor: "aisha",
   });
-  const result = evaluateSend(store, "c1", store.candidate("cand6"));
+  const result = evaluateSend(store, "c1", store.candidate("cand5"));
   assert.equal(result.state, "contradiction");
   const confirmed = store
     .preferences("c1")
@@ -118,10 +149,19 @@ test("an uncertain clarification changes no preference and keeps the contradicti
 
 test("positive evidence labels stated preferences and observed acceptances separately", () => {
   const store = fresh();
-  const cand = store.candidate("cand5"); // location_city_tier, personality_temperament
+  // Karan is in the Bangalore metro, which is what Priya stated, and she has
+  // accepted someone on that dimension before.
+  const cand = store.candidate("cand6");
   const result = evaluateSend(store, "c1", cand);
   const loc = result.positive.filter((p) => p.dimension === "location_city_tier");
   assert.ok(loc.some((p) => p.source === "stated_preference"));
   assert.ok(loc.some((p) => p.source === "observed_acceptance"));
-  assert.ok(!result.positive.some((p) => p.dimension === "personality_temperament"));
+});
+
+test("a candidate that does not match a stated preference is not positive evidence", () => {
+  const store = fresh();
+  // Aarav is in Pune. Priya stated Bangalore metro, so this is not support.
+  const result = evaluateSend(store, "c1", store.candidate("cand5"));
+  assert.ok(!result.positive.some((p) => p.source === "stated_preference"));
+  assert.ok(result.findings.some((f) => f.type === "preference_mismatch"));
 });

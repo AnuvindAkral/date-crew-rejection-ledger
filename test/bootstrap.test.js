@@ -26,7 +26,7 @@ test("bootstrap exposes candidates, dimensions and per-client review states", ()
 test("every queue candidate review state is one of the known states", () => {
   const store = createStore(buildSeed(NOW));
   const b = buildBootstrap(store);
-  const allowed = new Set(["conflict", "contradiction", "repeat", "clean", "untagged", "no_history", "uncoded_only"]);
+  const allowed = new Set(["conflict", "contradiction", "repeat", "preference_mismatch", "incomplete", "clean", "untagged", "no_history", "uncoded_only"]);
   for (const c of b.clients) {
     for (const q of c.queue) {
       assert.ok(allowed.has(q.review.state), `unexpected state ${q.review.state}`);
@@ -69,4 +69,29 @@ test("control-arm clients compute warnings but do not surface them", () => {
   const sam = meera.queue.find((q) => q.id === "cand10");
   assert.equal(sam.review.state, "contradiction");
   assert.equal(sam.review.surface, false);
+});
+
+test("queue candidates carry a dimensions list derived from their attributes", () => {
+  const store = createStore(buildSeed(NOW));
+  const b = buildBootstrap(store);
+  for (const c of b.clients) {
+    for (const q of c.queue) {
+      assert.ok(Array.isArray(q.dimensions), `queue candidate ${q.id} must expose dimensions`);
+      if (q.attributes) {
+        assert.deepEqual(
+          q.dimensions.slice().sort(),
+          Object.keys(q.attributes).sort(),
+          `queue candidate ${q.id} dimensions must match its attributes`
+        );
+      }
+    }
+  }
+});
+
+test("the top level candidate list also exposes derived dimensions", () => {
+  const store = createStore(buildSeed(NOW));
+  const b = buildBootstrap(store);
+  for (const cand of b.candidates) {
+    assert.ok(Array.isArray(cand.dimensions));
+  }
 });

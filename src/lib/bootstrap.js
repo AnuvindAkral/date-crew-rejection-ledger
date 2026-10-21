@@ -1,17 +1,8 @@
 "use strict";
 
 const { DIMENSIONS, SEVERITIES, dimensionLabel } = require("./dimensions");
-const { evaluateSend } = require("./rules");
+const { evaluateSend, acceptanceAfter, acceptanceDimensions, candidateDimensions } = require("./rules");
 const { computeMetricA, computeArcr, computeSessionMetrics } = require("./metrics");
-
-function acceptanceAfter(store, clientId, dimension, afterTime) {
-  const after = new Date(afterTime);
-  return store.acceptances(clientId).some((a) => {
-    const cand = store.candidate(a.candidateId);
-    if (!cand || !cand.dimensions.includes(dimension)) return false;
-    return new Date(a.acceptedAt) > after;
-  });
-}
 
 function buildLedger(store, clientId) {
   const rejections = store.rejections(clientId);
@@ -20,26 +11,30 @@ function buildLedger(store, clientId) {
   for (const r of rejections) {
     if (!r.dimension) continue;
     if (!byDim[r.dimension]) {
-      byDim[r.dimension] = { dimension: r.dimension, rejectionList: [], acceptedCount: 0, confirmedRule: null };
+      byDim[r.dimension] = { dimension: r.dimension, rejectionList: [], acceptedCount: 0, confirmedRule: null, confirmedValue: null };
     }
     byDim[r.dimension].rejectionList.push(r);
   }
 
+  // Counted on the dimensions the acceptance actually spoke for, using the
+  // same helper the send review uses, so the ledger and the card cannot
+  // disagree about what an acceptance means.
   for (const a of store.acceptances(clientId)) {
-    const cand = store.candidate(a.candidateId);
-    if (!cand) continue;
-    for (const d of cand.dimensions) {
+    for (const d of acceptanceDimensions(store, a)) {
       if (byDim[d]) byDim[d].acceptedCount += 1;
     }
   }
 
   const confirmed = new Map();
+  const confirmedValues = new Map();
   for (const c of store.confirmations(clientId)) {
     confirmed.set(c.dimension, c.answer);
+    if (c.value) confirmedValues.set(c.dimension, c.value);
   }
   for (const p of store.preferences(clientId)) {
     if (p.confirmed) {
       confirmed.set(p.dimension, p.kind === "confirmed_dealbreaker" ? "dealbreaker" : "preference");
+      if (p.value) confirmedValues.set(p.dimension, p.value);
     }
   }
 
@@ -60,6 +55,7 @@ function buildLedger(store, clientId) {
       latestDate: list[list.length - 1].recordedAt,
       acceptedCount: row.acceptedCount,
       confirmedRule: confirmed.get(row.dimension) || null,
+      confirmedValue: confirmedValues.get(row.dimension) || null,
       contradiction,
       earliestRejection: earliest,
       rejections: list,
@@ -81,13 +77,17 @@ function buildLedger(store, clientId) {
 function buildBootstrap(store) {
   const clients = store.state.clients.map((c) => {
     const queue = store.queue(c.id);
+    const mm = store.matchmaker(c.matchmakerId);
     return {
       id: c.id,
       name: c.name,
       city: c.city,
       journey: c.journey,
       arm: c.arm,
+      matchmakerId: c.matchmakerId,
+      matchmakerName: mm ? mm.name : null,
       preferences: store.preferences(c.id),
+      preferenceEvents: store.preferenceEvents(c.id),
       confirmations: store.confirmations(c.id),
       rejections: store.rejections(c.id),
       acceptances: store.acceptances(c.id).map((a) => ({
@@ -103,6 +103,7 @@ function buildBootstrap(store) {
       arcr: computeArcr(store, c.id),
       queue: queue.map((cand) => ({
         ...cand,
+        dimensions: candidateDimensions(cand),
         review: {
           ...evaluateSend(store, c.id, cand),
           surface: c.arm === "intervention",
@@ -116,10 +117,13 @@ function buildBootstrap(store) {
     meta: store.state.meta,
     dimensions: DIMENSIONS,
     severities: SEVERITIES,
+    matchmakers: store.matchmakers(),
     session: computeSessionMetrics(store),
-    candidates: store.state.candidates,
+    // Candidates carry a dimensions list derived from their attributes, so the
+    // interface and the server agree on what a candidate says something about.
+    candidates: store.state.candidates.map((c) => ({ ...c, dimensions: candidateDimensions(c) })),
     clients,
   };
 }
 
-module.exports = { buildBootstrap, buildLedger, acceptanceAfter };
+module.exports = { buildBootstrap, buildLedger };

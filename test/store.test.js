@@ -42,12 +42,14 @@ test("recordClientAnswer with preference confirms a stated preference", () => {
     clientId: "c1",
     dimension: "location_city_tier",
     answer: "preference",
+    value: "Bangalore metro",
     verbatim: "Location is a preference, not a dealbreaker",
     actor: "aisha",
   });
   const p = store.preferences("c1").find((x) => x.dimension === "location_city_tier");
   assert.equal(p.confirmed, true);
   assert.equal(p.kind, "stated_preference");
+  assert.equal(p.value, "Bangalore metro");
 });
 
 test("recordClientAnswer with dealbreaker writes a confirmed_dealbreaker", () => {
@@ -56,12 +58,28 @@ test("recordClientAnswer with dealbreaker writes a confirmed_dealbreaker", () =>
     clientId: "c3",
     dimension: "marital_history",
     answer: "dealbreaker",
+    value: "Divorced",
     verbatim: "Marital history is a dealbreaker for me",
     actor: "aisha",
   });
   const p = store.preferences("c3").find((x) => x.dimension === "marital_history");
   assert.equal(p.kind, "confirmed_dealbreaker");
   assert.equal(p.confirmed, true);
+  assert.equal(p.value, "Divorced");
+});
+
+test("recordClientAnswer without the client's words writes no rule", () => {
+  const store = createStore(buildSeed(NOW));
+  store.recordClientAnswer({
+    clientId: "c1",
+    dimension: "location_city_tier",
+    answer: "dealbreaker",
+    value: "Pune",
+    verbatim: "",
+    actor: "aisha",
+  });
+  const p = store.preferences("c1").find((x) => x.dimension === "location_city_tier");
+  assert.equal(p.confirmed, false);
 });
 
 test("recordClientAnswer with uncertain writes no preference", () => {

@@ -6,9 +6,16 @@ Zero dependencies. Synthetic data only. Runs locally.
 
 ## The problem
 
-The assessment says around 35% of rejected profiles were rejected for reasons already stated in the client's preferences. A matchmaker's work is built on conversations: a client says no to a profile and explains why, and that reason tells you what actually matters to them. But it usually lives in a message thread or a memory. A month later the same matchmaker, or a colleague covering the case, sends a profile that repeats the same mistake.
+The brief reports that some profiles are rejected for reasons already stated
+in a client's preferences. If that information was available before the
+profile was shared, the mismatch may have been preventable.
 
-The information is not missing. It is unavailable at the moment it would change the next decision.
+But the information isn't always complete, current or easy to find. A
+preference may be buried in a conversation, rejection feedback may be recorded
+only as free text, or a candidate's relevant detail may be unknown.
+
+The problem to test is simple: can a matchmaker catch a known mismatch before
+sending a profile, without adding so much work that they stop using the check?
 
 ## Why this direction
 
@@ -28,15 +35,16 @@ When a matchmaker is about to share a profile, the tool loads that client's reco
 
 When there is nothing to compare, the card says that instead of reporting a clean result: no feedback yet, untagged candidate, history present but uncoded, a client whose only record is a pattern someone noticed, or no conflict.
 
-A criterion records a **direction** and a **level of firmness** separately, because they are separate things. "Must be vegetarian" and "must not be vegetarian" are opposite criteria, and a model that stores only a dimension and a value cannot tell them apart. Comparisons are on values, not categories, so a vegetarian candidate does not trip a non-vegetarian dealbreaker. Both distinctions were missing from the first version, and the independent reviews found them.
+A criterion records a **direction** and a **level of firmness** separately, because they are separate things. "Must be vegetarian" and "must not be vegetarian" are opposite criteria, and a model that stores only a dimension and a value cannot tell them apart. Comparisons are on values, not categories, so a vegetarian candidate does not trip a non-vegetarian dealbreaker. Separate fresh-context AI reviews exposed two gaps in the initial logic: comparing categories instead of actual values, and treating historical behaviour as proof of a preference. I changed the comparison rules and evidence model in response, then added tests for those cases.
 
 Three kinds of evidence are kept apart, because they are not the same thing:
 
-| What is on the file | What it means | What it does |
+| What is recorded | What it means | How the tool treats it |
 | --- | --- | --- |
-| What the client confirmed | A rule | Every profile is checked against it |
-| What the client said at intake | Advice | Checked, and shown as advice rather than a no |
-| A pattern the matchmaker noticed | A hypothesis | Shown as context, offered to the client, and it never rules a profile out |
+| A preference confirmed by the client | A rule | Checks every applicable profile against it |
+| A preference stated at intake | A stated preference | Surfaces a mismatch as advice |
+| A pattern noticed by the matchmaker | A hypothesis | Offers it for clarification; never rules a profile out |
+| A previous acceptance or rejection | History | Provides context, but doesn't establish a preference |
 
 A confirmed rule has to be backed by something the client said, either their recorded answer or their own words written down. Without one of those it is an observation, and the write is refused. What the client did, accepted or rejected, is history. It never becomes a rule, and it is never held against them either.
 

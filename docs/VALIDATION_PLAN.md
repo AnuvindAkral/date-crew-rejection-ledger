@@ -61,7 +61,7 @@ Take a sample of shared profiles from the baseline period, and have a second per
 
 ### Step 5: the proposed pilot
 
-Only if steps 1 to 4 support the direction. The concurrent client-level design, metrics, guardrails, and stop conditions are in [PILOT_PLAN.md](../PILOT_PLAN.md).
+Only if steps 1 to 4 support the direction. The concurrent client-level design, metrics, guardrails, and stop conditions are in [GATE_B_EXPERIMENT.md](GATE_B_EXPERIMENT.md).
 
 ## What the prototype can and cannot tell us
 

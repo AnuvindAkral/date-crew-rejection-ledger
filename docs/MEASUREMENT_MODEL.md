@@ -20,7 +20,7 @@ Reporting coverage alongside the rate does not fix that. Coverage is a second nu
 
 ## The primary outcome
 
-> **Confirmed-criterion conflict rate at send time** = the proportion of all profiles shared in the measurement period that contained a conflict with a criterion the client had on file at the moment of sending, determined by an audit that does not depend on whether the checker was used.
+> **Recorded-criterion conflict rate at send time** = the proportion of all profiles shared in the measurement period that conflict with an active criterion recorded from the client's statements at the time of sending. The audit runs independently of whether the checker was used.
 
 | Piece | Definition |
 | --- | --- |
@@ -34,9 +34,20 @@ Reporting coverage alongside the rate does not fix that. Coverage is a second nu
 
 ## Why the denominator is every share
 
-If the denominator is every share, then sending fewer profiles makes the numerator and the denominator fall together, and the rate does not move. A matchmaker cannot improve the number by sending less.
+Every profile shared in the period belongs in the denominator, whether the
+checker was opened or not. This prevents the result from being calculated only
+over the profiles a matchmaker chose to check.
 
-The rate can still be moved by changing what is on a client's file, which is the point: the only thing that should move it is the criteria being right and the conflicts being caught before the profile goes out.
+The denominator alone does not eliminate every way the metric can mislead.
+Selective prevention of genuine conflicts is the intended result, while a
+general reduction in sharing could harm the funnel. Report share volume,
+checker adoption, acceptance and completed meetings alongside the conflict
+rate.
+
+An unaudited share is not a clean result. If audit coverage is incomplete, the
+rate must be labelled incomplete rather than presented as a fully observed
+result. Missing candidate attributes and clients with no applicable criteria
+remain separate categories; neither is evidence that a profile was a good match.
 
 ## Why the audit is separate from the check
 

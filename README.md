@@ -10,6 +10,8 @@ The Date Crew's matchmakers source and screen profiles by hand, and the richest 
 
 The mechanism is the contradiction card. When a client has rejected profiles on a dimension and later accepted a profile on the same dimension, the send review shows both and asks one question: is it a dealbreaker, or a preference? The matchmaker asks the client, records the answer, and the dimension is settled.
 
+The acceptance debrief captures the other half of the loop. When a client accepts a profile or has a positive experience, the matchmaker records what mattered and what surprised them. That insight then surfaces, with a checkbox, at the next send review, and the matchmaker marks whether it informed the recommendation. The measurement view reports the proportion of captured insights that were explicitly consulted, which measures whether the learning loop is used, not whether it improves matching.
+
 What it is not: an AI matcher, a chatbot, a ranking model or a dashboard. The conflict check is a deterministic field comparison. The only AI-shaped thing is a keyword heuristic that proposes a dimension from free text, which a human confirms or changes.
 
 ## Run it
@@ -30,7 +32,7 @@ node --test
 npm test
 ```
 
-31 tests cover the send-review rules, the metric computations, the store and the missing-data handling. No build step, no install.
+39 tests cover the send-review rules, the metric computations, the store, the missing-data handling, and the acceptance-debrief loop. No build step, no install.
 
 ## The 90 second demo
 

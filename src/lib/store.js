@@ -51,6 +51,21 @@ function buildSeed(now = Date.now()) {
     { id: "a1", clientId: "c1", candidateId: "cand4", dimension: "location_city_tier", acceptedAt: daysAgo(now, 10) },
   ];
 
+  // Acceptance insights captured by the matchmaker at the moment of a positive
+  // response. These are the missing positive signal: what mattered, and what
+  // surprised. Synthetic, matchmaker-authored, never inferred from the profile.
+  const insights = [
+    {
+      id: "i1",
+      clientId: "c1",
+      candidateId: "cand4",
+      dimensions: ["personality_temperament"],
+      surprise: "Warmer and calmer in person than his profile suggested. Location mattered less than she expected.",
+      recordedAt: daysAgo(now, 9),
+      recordedBy: "aisha",
+    },
+  ];
+
   // Historical shares that precede the rejections above. Each share must be
   // older than its rejection so the time ordering rules can be exercised.
   const shares = [
@@ -76,6 +91,7 @@ function buildSeed(now = Date.now()) {
     preferences,
     rejections,
     acceptances,
+    insights,
     confirmations: [],
     resolutions: [],
     shares,
@@ -119,6 +135,9 @@ function createStore(initial) {
     acceptances(clientId) {
       return state.acceptances.filter((a) => a.clientId === clientId);
     },
+    insights(clientId) {
+      return state.insights.filter((i) => i.clientId === clientId);
+    },
     confirmations(clientId) {
       return state.confirmations.filter((c) => c.clientId === clientId);
     },
@@ -137,11 +156,18 @@ function createStore(initial) {
       state.queues[clientId] = q.filter((cid) => cid !== candidateId);
     },
 
-    share({ clientId, candidateId, actor }) {
-      const rec = { id: id("shr"), clientId, candidateId, sharedAt: nowIso(), actor };
+    share({ clientId, candidateId, actor, consultedInsightIds }) {
+      const rec = {
+        id: id("shr"),
+        clientId,
+        candidateId,
+        sharedAt: nowIso(),
+        actor,
+        consultedInsightIds: Array.isArray(consultedInsightIds) ? consultedInsightIds : [],
+      };
       state.shares.push(rec);
       store.removeFromQueue(clientId, candidateId);
-      log("share", { clientId, candidateId, actor });
+      log("share", { clientId, candidateId, actor, consultedInsightIds: rec.consultedInsightIds });
       return rec;
     },
 
@@ -170,9 +196,25 @@ function createStore(initial) {
       return rec;
     },
 
-    accept({ clientId, candidateId, actor }) {
+    accept({ clientId, candidateId, actor, dimensions, surprise }) {
       const rec = { id: id("acc"), clientId, candidateId, acceptedAt: nowIso() };
       state.acceptances.push(rec);
+      // The acceptance debrief: capture what mattered and what surprised, only if
+      // the matchmaker records it. Nothing is inferred from the profile itself.
+      if ((Array.isArray(dimensions) && dimensions.length > 0) || (surprise && surprise.trim())) {
+        const insight = {
+          id: id("ins"),
+          clientId,
+          candidateId,
+          dimensions: Array.isArray(dimensions) ? dimensions : [],
+          surprise: surprise || "",
+          recordedAt: nowIso(),
+          recordedBy: actor,
+        };
+        state.insights.push(insight);
+        log("acceptance_insight", { clientId, candidateId, dimensions: insight.dimensions, actor });
+        rec.insightId = insight.id;
+      }
       store.removeFromQueue(clientId, candidateId);
       log("profile_accepted", { clientId, candidateId, actor });
       return rec;

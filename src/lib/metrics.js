@@ -150,11 +150,30 @@ function computeSessionMetrics(store) {
     codedRejections: rejections.filter((r) => r.dimension).length,
     uncodedRejections: rejections.filter((r) => !r.dimension).length,
     acceptances: store.state.acceptances.length,
+    insights: store.state.insights.length,
     confirmations: store.state.confirmations.length,
     resolutions: store.state.resolutions.length,
     auditEvents: store.state.audit.length,
     medianCaptureLatencyMs: median,
+    insightConsultation: computeInsightConsultation(store),
   };
 }
 
-module.exports = { computeMetricA, computeArcr, computeSessionMetrics };
+// The learning-loop metric: of the acceptance insights the matchmaker captured,
+// how many were explicitly consulted in a later recommendation. This measures
+// whether the loop is used, not whether it improves matching.
+function computeInsightConsultation(store) {
+  const insights = store.state.insights || [];
+  const consulted = new Set();
+  for (const s of store.state.shares || []) {
+    for (const id of s.consultedInsightIds || []) consulted.add(id);
+  }
+  const consultedCount = insights.filter((i) => consulted.has(i.id)).length;
+  return {
+    total: insights.length,
+    consulted: consultedCount,
+    rate: insights.length ? consultedCount / insights.length : null,
+  };
+}
+
+module.exports = { computeMetricA, computeArcr, computeSessionMetrics, computeInsightConsultation };

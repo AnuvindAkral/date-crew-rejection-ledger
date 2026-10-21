@@ -51,7 +51,12 @@ function applyAction(body) {
   const actor = (payload && payload.actor) || "aisha";
   switch (type) {
     case "share":
-      store.share({ clientId: payload.clientId, candidateId: payload.candidateId, actor });
+      store.share({
+        clientId: payload.clientId,
+        candidateId: payload.candidateId,
+        consultedInsightIds: payload.consultedInsightIds,
+        actor,
+      });
       break;
     case "reject":
       store.reject({
@@ -65,7 +70,13 @@ function applyAction(body) {
       });
       break;
     case "accept":
-      store.accept({ clientId: payload.clientId, candidateId: payload.candidateId, actor });
+      store.accept({
+        clientId: payload.clientId,
+        candidateId: payload.candidateId,
+        dimensions: payload.dimensions,
+        surprise: payload.surprise,
+        actor,
+      });
       break;
     case "resolve":
       store.resolve({

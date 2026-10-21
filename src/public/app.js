@@ -147,6 +147,22 @@ function renderClient(clientId) {
         .join("")
     : `<p class="muted small">No rejections logged yet. Capture a rejection to start the ledger.</p>`;
 
+  const insightsHtml = (c.insights || []).length
+    ? c.insights
+        .map(
+          (i) => `
+        <div class="insight-row">
+          <div class="insight-head">
+            <span class="ledger-dim">accepted ${esc(i.candidateName)}</span>
+            <span class="ledger-counts">${relTime(i.recordedAt)}</span>
+          </div>
+          <div class="taglist">${i.dimensions.length ? i.dimensions.map((d) => `<span class="tag">${esc(dimLabel(d))}</span>`).join("") : `<span class="tag muted">no dimensions recorded</span>`}</div>
+          ${i.surprise ? `<div class="q">“${esc(i.surprise)}”</div>` : `<div class="muted small">no note recorded</div>`}
+        </div>`
+        )
+        .join("")
+    : `<p class="muted small">No acceptance insights yet. Accept a profile to record what mattered or surprised you.</p>`;
+
   const queueHtml = c.queue.length
     ? c.queue
         .map((cand) => {
@@ -165,7 +181,8 @@ function renderClient(clientId) {
             </div>
             <div class="candidate-actions">
               <button class="btn" data-send="${cand.id}">Send</button>
-              <button class="btn secondary" data-reject="${cand.id}">Reject</button>
+              <button class="btn secondary" data-accept="${cand.id}">Accept</button>
+              <button class="btn ghost" data-reject="${cand.id}">Reject</button>
             </div>
           </div>`;
         })
@@ -186,6 +203,11 @@ function renderClient(clientId) {
     <div class="panel">
       <div class="completeness">${c.ledger.codedCount} of ${c.ledger.total} rejections coded${c.ledger.uncoded ? ` · ${c.ledger.uncoded} uncoded` : ""}</div>
       ${ledgerHtml}
+    </div>
+
+    <h2>Acceptance insights</h2>
+    <div class="panel">
+      ${insightsHtml}
     </div>
 
     <h2>Shared profiles</h2>
@@ -237,6 +259,7 @@ function renderMeasurement() {
       <div class="metric-card"><div class="metric-value">${s.codedRejections}</div><div class="metric-label">Coded rejections</div></div>
       <div class="metric-card"><div class="metric-value">${s.uncodedRejections}</div><div class="metric-label">Uncoded rejections</div></div>
       <div class="metric-card"><div class="metric-value">${s.acceptances}</div><div class="metric-label">Acceptances</div></div>
+      <div class="metric-card"><div class="metric-value">${s.insights}</div><div class="metric-label">Acceptance insights</div></div>
       <div class="metric-card"><div class="metric-value">${s.confirmations}</div><div class="metric-label">Client confirmations</div></div>
       <div class="metric-card"><div class="metric-value">${s.resolutions}</div><div class="metric-label">Card resolutions</div></div>
     </div>
@@ -251,6 +274,12 @@ function renderMeasurement() {
         ${rows}
       </table>
       <p class="note">ARCR measures recurrence, not avoidability. Sub-rates split the numerator by the evidence available at share time: hard (a confirmed dealbreaker existed), settled (a confirmed preference, so the card is silent), contradiction (a prior rejection then a later acceptance), plain (a prior rejection only). Synthetic, illustrative data.</p>
+    </div>
+
+    <h2>Learning loop · acceptance insight consultation</h2>
+    <div class="panel">
+      <div class="metric-value">${s.insightConsultation.consulted} / ${s.insightConsultation.total}${s.insightConsultation.rate == null ? "" : ` = ${Math.round(s.insightConsultation.rate * 100)}%`}</div>
+      <p class="note">Of the acceptance insights the matchmaker captured, how many were explicitly consulted in a later recommendation. This measures whether the learning loop is used, not whether it improves matching. Recommendation quality and accepted-to-meeting outcomes are later-validation questions, not two-week claims.</p>
     </div>
 
     ${ref}`;
@@ -289,6 +318,29 @@ function positiveStrip(rv) {
   return `<div class="evidence-strip"><span class="strip-label">Supports sending</span>${items}</div>`;
 }
 
+function insightsStrip(insights) {
+  const list = insights || [];
+  if (!list.length) return "";
+  const items = list
+    .map(
+      (i) => `
+      <label class="insight-check">
+        <input type="checkbox" class="consult-check" data-insight="${esc(i.id)}" />
+        <span class="insight-body">
+          <span class="pos-source">accepted ${esc(i.candidateName)}</span>
+          ${i.dimensions.length ? i.dimensions.map((d) => `<span class="tag">${esc(dimLabel(d))}</span>`).join("") : `<span class="tag muted">no dimensions</span>`}
+          ${i.surprise ? `<span class="q">“${esc(i.surprise)}”</span>` : ""}
+        </span>
+      </label>`
+    )
+    .join("");
+  return `<div class="evidence-strip insights">
+    <span class="strip-label">Acceptance insights</span>
+    <span class="muted small">Tick the ones that informed this recommendation.</span>
+    ${items}
+  </div>`;
+}
+
 function openSend(clientId, cand) {
   const rv = cand.review;
   const cl = client(clientId);
@@ -310,6 +362,7 @@ function openSend(clientId, cand) {
   }
 
   const positiveHtml = positiveStrip(rv);
+  const insightsHtml = insightsStrip(cl.insights);
   let body = "";
   let actions = "";
 
@@ -386,9 +439,13 @@ function openSend(clientId, cand) {
     <h2>Send review · ${esc(cand.name)} → ${esc(cl.name)}</h2>
     ${body}
     ${positiveHtml}
+    ${insightsHtml}
     <div class="modal-actions">${actions}</div>`);
 
-  const send = () => sendAndResolve(clientId, cand.id, "proceed", "Send reviewed");
+  const send = () => {
+    const consulted = [...$modal.querySelectorAll(".consult-check:checked")].map((el) => el.getAttribute("data-insight"));
+    sendAndResolve(clientId, cand.id, "proceed", "Send reviewed", consulted);
+  };
   const ask = () => openAnswer(clientId, cand, cand.review.findings[0] ? cand.review.findings[0].dimension : null);
   const hold = () => holdSend(clientId, cand.id);
 
@@ -399,8 +456,8 @@ function openSend(clientId, cand) {
   root.querySelector("[data-close]") && root.querySelector("[data-close]").addEventListener("click", closeModal);
 }
 
-async function sendAndResolve(clientId, candidateId, actionName, rationale) {
-  await action("share", { clientId, candidateId });
+async function sendAndResolve(clientId, candidateId, actionName, rationale, consultedInsightIds) {
+  await action("share", { clientId, candidateId, consultedInsightIds });
   await action("resolve", { clientId, candidateId, action: actionName, rationale });
   closeModal();
   render();
@@ -540,6 +597,56 @@ function openReject(clientId, cand) {
   });
 }
 
+function openAccept(clientId, cand) {
+  const dims = state.dimensions;
+  openModal(`
+    <h2>Accept · ${esc(cand.name)}</h2>
+    <p class="muted small">Record what this positive response taught you. Nothing is inferred from the profile.</p>
+    <div class="field">
+      <label>What mattered? <span class="muted small">(pick one or more)</span></label>
+      <div class="dim-picker" id="accept-dim-picker">
+        ${dims
+          .map((d) => `<span class="dim-chip" data-dim="${d.key}" title="${esc(d.hint)}">${esc(d.label)}</span>`)
+          .join("")}
+      </div>
+    </div>
+    <div class="field">
+      <label>What surprised you?</label>
+      <textarea id="accept-surprise" placeholder="e.g. He was warmer in person than his profile suggested"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" data-close>Cancel</button>
+      <button class="btn" id="save-accept">Save acceptance</button>
+    </div>`);
+
+  const selected = new Set();
+  const picker = $modal.querySelector("#accept-dim-picker");
+  picker.querySelectorAll(".dim-chip").forEach((chip) =>
+    chip.addEventListener("click", () => {
+      const key = chip.getAttribute("data-dim");
+      if (selected.has(key)) {
+        selected.delete(key);
+        chip.classList.remove("selected");
+      } else {
+        selected.add(key);
+        chip.classList.add("selected");
+      }
+    })
+  );
+
+  $modal.querySelector("[data-close]").addEventListener("click", closeModal);
+  $modal.querySelector("#save-accept").addEventListener("click", async () => {
+    await action("accept", {
+      clientId,
+      candidateId: cand.id,
+      dimensions: [...selected],
+      surprise: $modal.querySelector("#accept-surprise").value,
+    });
+    closeModal();
+    render();
+  });
+}
+
 // ---- events ----
 
 $app.addEventListener("click", (e) => {
@@ -561,6 +668,12 @@ $app.addEventListener("click", (e) => {
   if (sendEl) {
     const cand = client(currentClientId).queue.find((q) => q.id === sendEl.getAttribute("data-send"));
     openSend(currentClientId, cand);
+    return;
+  }
+  const acceptEl = e.target.closest("[data-accept]");
+  if (acceptEl) {
+    const cand = client(currentClientId).queue.find((q) => q.id === acceptEl.getAttribute("data-accept"));
+    openAccept(currentClientId, cand);
     return;
   }
   const rejectEl = e.target.closest("[data-reject]");

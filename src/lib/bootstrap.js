@@ -94,6 +94,10 @@ function buildBootstrap(store) {
         ...a,
         candidateName: store.candidate(a.candidateId) ? store.candidate(a.candidateId).name : null,
       })),
+      insights: store.insights(c.id).map((i) => ({
+        ...i,
+        candidateName: store.candidate(i.candidateId) ? store.candidate(i.candidateId).name : null,
+      })),
       ledger: buildLedger(store, c.id),
       metricA: computeMetricA(store, c.id),
       arcr: computeArcr(store, c.id),

@@ -38,6 +38,20 @@ const SOURCE_OPTIONS = [
   ["referral", "Referral"],
 ];
 
+const KIND_LABEL = {
+  confirmed_dealbreaker: "confirmed dealbreaker",
+  confirmed_preference: "confirmed preference",
+  stated_preference: "stated preference",
+};
+
+// A criterion read in words: the direction, the values, and how firm it is.
+function criterionText(c) {
+  if (!c) return "";
+  const vals = (c.values || []).join(" or ");
+  const dir = c.operator === "must_not_be" ? "must not be" : "must be";
+  return `${dir} ${vals} (${KIND_LABEL[c.kind] || "criterion"})`;
+}
+
 function esc(s) {
   return String(s == null ? "" : s)
     .replace(/&/g, "&amp;")
@@ -107,7 +121,7 @@ async function action(type, payload) {
   } catch (err) {
     return { ok: false, error: "server_error", message: "The server did not answer." };
   }
-  if (!res.ok) {
+  if (!res.ok || data.error) {
     return { ok: false, error: data.error, message: data.message, field: data.field };
   }
   state = data;
@@ -211,11 +225,11 @@ function renderClient(clientId) {
         .map(
           (p) => `<div class="pref-row">
             <div class="pref-row-head">
-              <span class="pref-tag ${p.kind === "confirmed_dealbreaker" ? "dealbreaker" : ""}">${esc(dimLabel(p.dimension))} · ${p.kind === "confirmed_dealbreaker" ? "confirmed dealbreaker" : "preference"}${p.value ? " · " + esc(p.value) : ""}</span>
-              <button class="link-btn" data-rm-pref="${esc(p.id)}" data-dim="${esc(p.dimension)}">Remove</button>
+              <span class="pref-tag ${p.kind === "confirmed_dealbreaker" ? "dealbreaker" : ""}">${esc(dimLabel(p.dimension))} · ${esc(p.operator === "must_not_be" ? "must not be" : "must be")} ${esc((p.values || []).join(" or "))}</span>
+              <button class="link-btn" data-rm-pref="${esc(p.id)}" data-dim="${esc(dimLabel(p.dimension))}">Remove</button>
             </div>
             ${p.note ? `<div class="pref-note">“${esc(p.note)}”</div>` : `<div class="pref-note muted small">No note recorded. Add the client's own words.</div>`}
-            <div class="pref-meta">${p.source === "client_answer" ? "confirmed by the client" : "recorded at intake"} · ${p.recordedBy ? esc(p.recordedBy) : "unknown"}${p.recordedAt ? " · " + relTime(p.recordedAt) : ""}</div>
+            <div class="pref-meta">${esc(KIND_LABEL[p.kind] || "criterion")} · ${p.source === "client_answer" ? "confirmed by the client" : "recorded at intake"}${p.recordedBy ? " by " + esc(p.recordedBy) : ""}${p.recordedAt ? " · " + relTime(p.recordedAt) : ""}</div>
           </div>`
         )
         .join("")
@@ -223,7 +237,7 @@ function renderClient(clientId) {
 
   const withdrawnHtml = withdrawn.length
     ? `<div class="pref-meta withdrawn-note">Withdrawn: ${withdrawn
-        .map((p) => `${esc(dimLabel(p.dimension))} · ${esc(p.value || "")}`)
+        .map((p) => `${esc(dimLabel(p.dimension))} ${esc(criterionText(p))}`)
         .join("; ")}</div>`
     : "";
 
@@ -236,7 +250,7 @@ function renderClient(clientId) {
             <span class="muted small">${
               e.after === null
                 ? "withdrawn"
-                : `${e.before && e.before.value !== e.after.value ? `changed from ${esc(e.before.value)} to ` : ""}${e.after.kind === "confirmed_dealbreaker" ? "confirmed dealbreaker" : "preference"} · ${esc(e.after.value)}`
+                : `${e.before && criterionText(e.before) !== criterionText(e.after) ? `changed from ${esc(criterionText(e.before))} to ` : ""}${esc(criterionText(e.after))}`
             } · ${relTime(e.at)}${e.by ? " · " + esc(e.by) : ""}</span>
           </div>`
         )
@@ -311,7 +325,11 @@ function renderClient(clientId) {
     <div class="client-header">
       <div>
         <h1>${esc(c.name)}</h1>
-        <span class="muted small">${esc(c.city)} · ${esc(c.journey)} · ${c.matchmakerName ? esc(c.matchmakerName) : "unassigned"} · ${c.arm === "intervention" ? "ledger on" : "control arm"}</span>
+        <span class="muted small">${esc(c.city)} · ${esc(c.journey)} · ${c.matchmakerName ? esc(c.matchmakerName) : "unassigned"}</span>
+      </div>
+      <div class="arm-control">
+        <span class="muted small">Pilot arm: ${c.arm === "control" ? "control, the check is computed but not shown" : "intervention, the check is shown"}</span>
+        <button class="link-btn" data-set-arm="${c.arm === "control" ? "intervention" : "control"}" data-client="${esc(c.id)}">Move to the ${c.arm === "control" ? "intervention" : "control"} arm</button>
       </div>
     </div>
 
@@ -348,7 +366,9 @@ function pct(v) {
 
 function renderMeasurement() {
   const s = state.session;
-  const st = s.sendTime;
+  const o = s.outcome;
+  const w = o.window;
+
   const ref = `
     <h2>Reference scenario</h2>
     <div class="panel">
@@ -361,10 +381,23 @@ function renderMeasurement() {
         <tr><td>Meetings fixed</td><td>75</td><td>50.0%</td></tr>
         <tr><td>Meetings completed</td><td>42</td><td>56.0%</td></tr>
       </table>
-      <p class="note">Supplied scenario figures from the assessment brief. About 35% of rejections were for reasons already stated in client preferences, denominator ambiguous. This is reference context, not this session's data.</p>
+      <p class="note">Supplied scenario figures from the assessment brief. About 35% of rejected profiles were reportedly for reasons already stated in client preferences, denominator ambiguous. This is reference context, not this session's data.</p>
     </div>`;
 
-  const rows = state.clients
+  const periodRow = (label, b) => `
+    <tr>
+      <td>${label}</td>
+      <td>${b.shares}</td>
+      <td>${b.audited}</td>
+      <td>${b.conflictShares}</td>
+      <td>${b.hardConflictShares}</td>
+      <td>${b.softMismatchShares}</td>
+      <td>${b.unknownShares}</td>
+      <td>${b.cleanShares}</td>
+      <td>${pct(b.rate)}</td>
+    </tr>`;
+
+  const clientRows = state.clients
     .map((c) => {
       const a = c.metricA;
       const b = c.arcr;
@@ -380,86 +413,163 @@ function renderMeasurement() {
     })
     .join("");
 
-  const armRows = `
-    <tr>
-      <th>Arm</th><th>Profiles shared</th><th>Checked</th><th>Not checked</th><th>With a confirmed conflict</th><th>Dealbreaker / preference</th><th>Unknown, not clean</th><th>Rate</th>
-    </tr>
-    <tr>
-      <td>Intervention (the check is shown)</td>
-      <td>${st.intervention.shared}</td>
-      <td>${st.intervention.checked}</td>
-      <td>${st.intervention.notChecked}</td>
-      <td>${st.intervention.conflictShares}</td>
-      <td>${st.intervention.dealbreakerConflictShares} / ${st.intervention.preferenceConflictShares}</td>
-      <td>${st.intervention.unknownShares}</td>
-      <td>${pct(st.intervention.rate)}</td>
-    </tr>
-    <tr>
-      <td>Control (the check is computed but not shown)</td>
-      <td>${st.control.shared}</td>
-      <td>${st.control.checked}</td>
-      <td>${st.control.notChecked}</td>
-      <td>${st.control.conflictShares}</td>
-      <td>${st.control.dealbreakerConflictShares} / ${st.control.preferenceConflictShares}</td>
-      <td>${st.control.unknownShares}</td>
-      <td>${pct(st.control.rate)}</td>
-    </tr>`;
-
-  const clientRows = st.perClient
+  const mmRows = o.byMatchmaker
     .map(
-      (c) => `<tr>
-        <td>${esc(c.name)}</td>
-        <td>${esc(c.arm)}</td>
-        <td>${c.shared}</td>
-        <td>${c.checked}</td>
-        <td>${c.conflictShares}</td>
-        <td>${c.unknownShares}</td>
-        <td>${pct(c.rate)}</td>
-        <td>${c.overrideRate == null ? "n/a" : pct(c.overrideRate)}</td>
+      (m) => `<tr>
+        <td>${esc(m.name)}</td>
+        <td>${m.shares}</td>
+        <td>${m.audited}</td>
+        <td>${m.conflictShares}</td>
+        <td>${m.unknownShares}</td>
+        <td>${pct(m.rate)}</td>
       </tr>`
     )
     .join("");
 
+  const clRows = o.byClient
+    .map(
+      (c) => `<tr>
+        <td>${esc(c.name)}</td>
+        <td>${c.shares}</td>
+        <td>${c.audited}</td>
+        <td>${c.conflictShares}</td>
+        <td>${c.hardConflictShares}</td>
+        <td>${c.unknownShares}</td>
+        <td>${pct(c.rate)}</td>
+      </tr>`
+    )
+    .join("");
+
+  const audits = (state.audits || [])
+    .slice()
+    .reverse()
+    .map((a) => {
+      const cl = state.clients.find((x) => x.id === a.clientId);
+      const cand = state.candidates.find((x) => x.id === a.candidateId);
+      const detail = (a.details || [])
+        .map((d) => `${esc(d.requirement || d.dimension)}${d.value ? " vs " + esc(d.value) : " (value not recorded)"}`)
+        .join("; ");
+      const review =
+        a.humanConfirmed === true
+          ? `<span class="chip clean">confirmed</span>`
+          : a.humanConfirmed === false
+            ? `<span class="chip conflict">disputed</span>`
+            : `<button class="link-btn" data-audit-confirm="${esc(a.id)}">Confirm</button> <button class="link-btn" data-audit-dispute="${esc(a.id)}">Dispute</button>`;
+      return `<tr>
+        <td>${esc(cl ? cl.name : a.clientId)}</td>
+        <td>${esc(cand ? cand.name : a.candidateId)}</td>
+        <td>${esc(a.classification.replace("_", " "))}</td>
+        <td class="small">${esc(detail)}</td>
+        <td>${review}</td>
+      </tr>`;
+    })
+    .join("");
+
   $app.innerHTML = `
     <h1>Measurement</h1>
-    <p class="lead">Pilot operator view. The primary metric is measured at the moment of sending, and the check is recomputed on the server at that moment, so these are facts about the sends rather than claims by the interface.</p>
+    <p class="lead">The operator view. The primary outcome is measured over every profile shared, and it is decided by an audit that does not depend on whether the matchmaker used the check. That is what stops the number improving because people stopped using the tool.</p>
 
-    <h2>Primary · confirmed-criterion conflict rate at send time</h2>
-    <div class="panel">
-      <table class="metrics">${armRows}</table>
-      <p class="note"><strong>Definition.</strong> Profiles shared where the send-time check reported a conflict against a client-confirmed criterion, divided by the profiles that were checked, times 100. The numerator keeps dealbreaker conflicts and confirmed-preference mismatches apart. Ordinary stated preferences and prior-rejection history are advisory and are not in the numerator.</p>
-      <p class="note"><strong>Denominator.</strong> The profiles that were checked. A share with no check has an unknown conflict status, so it is reported in its own column rather than folded in. Coverage is ${pct(st.intervention.coverage)} on the intervention arm. A share where the check could not be made because a candidate attribute is missing is reported as unknown and is never counted as a clean result.</p>
-      <p class="note"><strong>Override.</strong> Of the conflicts the tool put in front of the matchmaker, the share that still went to the client: ${pct(st.intervention.overrideRate)} on the intervention arm. The control arm's rate is what the same check would have found without being shown, which is the comparison the pilot is built around.</p>
-      <p class="note">Synthetic data. These numbers describe this demo session, not The Date Crew's business. A working demo is evidence that the workflow exists, not evidence that any business metric moved.</p>
-    </div>
-
-    <h2>Per client</h2>
+    <h2>Primary outcome · criterion conflicts among all profiles shared</h2>
     <div class="panel">
       <table class="metrics">
-        <tr><th>Client</th><th>Arm</th><th>Shared</th><th>Checked</th><th>Conflicts</th><th>Unknown</th><th>Rate</th><th>Override</th></tr>
-        ${clientRows || `<tr><td colspan="8" class="muted">No shares yet.</td></tr>`}
+        <tr><th>Period</th><th>Shared</th><th>Audited</th><th>Conflicted</th><th>Hard</th><th>Soft</th><th>Unknown</th><th>Clean</th><th>Rate</th></tr>
+        ${periodRow("Baseline, before the window", w.baseline)}
+        ${periodRow("Baseline, control arm", w.baselineControl)}
+        ${periodRow("Measurement window, intervention", w.measurement)}
+        ${periodRow("Measurement window, control", w.measurementControl)}
       </table>
+      <p class="note"><strong>Definition.</strong> The proportion of all profiles shared in the period that contain a conflict with a criterion the client had on file at the moment of sending. Numerator: profiles whose audit found a violated criterion. Denominator: every profile shared in the period, whether or not the check was opened. Classification: a <strong>hard</strong> conflict breaks a confirmed dealbreaker, a <strong>soft</strong> mismatch breaks a confirmed or stated preference, and <strong>unknown</strong> means a criterion could not be checked because the candidate's value is not recorded, which is never counted as clean.</p>
+      <p class="note"><strong>Window.</strong> The measurement window opened on ${esc(new Date(w.pilotStart).toISOString().slice(0, 10))}. Everything before it is baseline, audited by the same process, so the two are comparable.</p>
+      <p class="note"><strong>Audit.</strong> Every share is re-evaluated after the fact against the criteria that were in force at the time, by the same rules, whether or not the check was shown and whichever arm the client is on. A reviewer can confirm or dispute each audit, and the human-confirmed figure is reported separately. An automated audit can inherit the rule engine's mistakes, which is why the human step exists and why a real pilot would blind-re-code a sample.</p>
+      <p class="note"><strong>What this is not.</strong> These are synthetic numbers from a local prototype. They are a proposed pilot measurement, not a demonstrated effect on The Date Crew's business. No pilot has been run.</p>
+    </div>
+
+    <h2>Adoption guardrail</h2>
+    <div class="panel">
+      <table class="metrics">
+        <tr><th>Arm</th><th>Eligible profiles shared</th><th>Checked before sending</th><th>Rate</th></tr>
+        <tr><td>Intervention</td><td>${o.adoption.intervention.eligible}</td><td>${o.adoption.intervention.checked}</td><td>${pct(o.adoption.intervention.rate)}</td></tr>
+        <tr><td>Control</td><td>${o.adoption.control.eligible}</td><td>${o.adoption.control.checked}</td><td>${pct(o.adoption.control.rate)}</td></tr>
+      </table>
+      <p class="note">The proportion of eligible profiles shared that had the check open before they went out. The control arm is zero by design, because the check is computed for it but never shown. A primary rate that falls while this falls is not a result, and the two are shown together so that is visible.</p>
+    </div>
+
+    <h2>Diagnostics</h2>
+    <div class="panel">
+      <table class="metrics">
+        <tr><th>Measure</th><th>Value</th><th>What it means</th></tr>
+        <tr><td>Confirmed dealbreaker conflicts reaching the client</td><td>${w.measurement.hardConflictShares}</td><td>Audit found the profile broke a confirmed no</td></tr>
+        <tr><td>Softer preference mismatches reaching the client</td><td>${w.measurement.softMismatchShares}</td><td>Broke a preference, confirmed or not, and broke no firm no. The two rows are disjoint and add up to the rate</td></tr>
+        <tr><td>Unknown coverage</td><td>${w.measurement.unknownShares} of ${w.measurement.audited} audited</td><td>Could not be checked because a value is not recorded</td></tr>
+        <tr><td>Overrides</td><td>${o.overrides.count} (${o.overrides.dealbreaker} firm, ${o.overrides.preference} preference, ${o.overrides.advisory} advisory)</td><td>A warning was on the card and the profile went anyway</td></tr>
+        <tr><td>Overrides with a stated reason</td><td>${o.overrides.withReason} of ${o.overrides.count}</td><td>Without a reason, an override cannot be reviewed</td></tr>
+      </table>
+      ${
+        o.overrides.detail.length
+          ? `<table class="metrics">
+              <tr><th>Client</th><th>Candidate</th><th>Level</th><th>Reason given</th></tr>
+              ${o.overrides.detail
+                .map(
+                  (x) => `<tr>
+                    <td>${esc((state.clients.find((c) => c.id === x.clientId) || {}).name || x.clientId)}</td>
+                    <td>${esc((state.candidates.find((c) => c.id === x.candidateId) || {}).name || x.candidateId)}</td>
+                    <td>${esc(x.level)}</td>
+                    <td>${x.reason ? esc(x.reason) : `<span class="muted">none given</span>`}</td>
+                  </tr>`
+                )
+                .join("")}
+            </table>`
+          : ""
+      }
+      <p class="note">Overrides are reported because a matchmaker who overrides every warning has a tool that is not working, and a tool that is not working should not be defended as a success. The reason is what makes them reviewable.</p>
+    </div>
+
+    <h2>By matchmaker</h2>
+    <div class="panel">
+      <table class="metrics">
+        <tr><th>Matchmaker</th><th>Shared</th><th>Audited</th><th>Conflicted</th><th>Unknown</th><th>Rate</th></tr>
+        ${mmRows || `<tr><td colspan="6" class="muted">No shares yet.</td></tr>`}
+      </table>
+      <p class="note">Read these as a per-matchmaker description, not as a comparison. Case mix and sourcing differ between matchmakers, and without controlling for them the 44% and 21% acceptance rates in the brief cannot be read as a difference in skill. Small numbers are not evidence either way.</p>
+    </div>
+
+    <h2>By client</h2>
+    <div class="panel">
+      <table class="metrics">
+        <tr><th>Client</th><th>Shared</th><th>Audited</th><th>Conflicted</th><th>Hard</th><th>Unknown</th><th>Rate</th></tr>
+        ${clRows || `<tr><td colspan="7" class="muted">No shares yet.</td></tr>`}
+      </table>
+    </div>
+
+    <h2>Audit</h2>
+    <div class="panel">
+      <table class="metrics">
+        <tr><th>Client</th><th>Candidate</th><th>Audit says</th><th>Criterion against candidate value</th><th>Review</th></tr>
+        ${audits || `<tr><td colspan="5" class="muted">No shares audited yet.</td></tr>`}
+      </table>
+      <p class="note">One row per profile shared, including the ones with nothing against them, so the denominator is visible and not just the interesting cases.</p>
     </div>
 
     <h2>Session counts</h2>
     <div class="metric-grid">
       <div class="metric-card"><div class="metric-value">${s.shares}</div><div class="metric-label">Shares</div></div>
+      <div class="metric-card"><div class="metric-value">${s.cardViews}</div><div class="metric-label">Cards opened</div></div>
+      <div class="metric-card"><div class="metric-value">${s.audits}</div><div class="metric-label">Audits</div></div>
       <div class="metric-card"><div class="metric-value">${s.codedRejections}</div><div class="metric-label">Coded rejections</div></div>
       <div class="metric-card"><div class="metric-value">${s.uncodedRejections}</div><div class="metric-label">Uncoded rejections</div></div>
       <div class="metric-card"><div class="metric-value">${s.acceptances}</div><div class="metric-label">Acceptances</div></div>
       <div class="metric-card"><div class="metric-value">${s.insights}</div><div class="metric-label">Acceptance insights</div></div>
       <div class="metric-card"><div class="metric-value">${s.confirmations}</div><div class="metric-label">Client confirmations</div></div>
-      <div class="metric-card"><div class="metric-value">${s.resolutions}</div><div class="metric-label">Card resolutions</div></div>
     </div>
 
     <h2>Diagnostic · historical conflict rate</h2>
-    <div class="panel"><div class="muted small">Coded rejections whose reason was already in the client's recorded preferences at rejection time. This is the post-hoc version of the brief's 35% figure, and its denominator is the rejections, not the shares. Use the primary metric above to judge the intervention.</div></div>
+    <div class="panel"><div class="muted small">Coded rejections whose reason was already in the client's recorded preferences at rejection time. This is the post-hoc version of the brief's 35% figure, and its denominator is the rejections, not the shares. It is a diagnostic, not the primary outcome.</div></div>
 
     <h2>Diagnostic · repeat-conflict rate (recurrence)</h2>
     <div class="panel">
       <table class="metrics">
         <tr><th>Client</th><th>Historical (coded)</th><th>Conflicts</th><th>ARCR eligible / repeat</th><th>ARCR sub-rates</th><th>ARCR</th></tr>
-        ${rows}
+        ${clientRows}
       </table>
       <p class="note">ARCR measures recurrence, not avoidability. Sub-rates split the numerator by the evidence available at share time: hard (a confirmed dealbreaker existed), settled (a confirmed preference, so the card is silent), contradiction (a prior rejection then a later acceptance), plain (a prior rejection only). Synthetic, illustrative data.</p>
     </div>
@@ -467,7 +577,7 @@ function renderMeasurement() {
     <h2>Learning loop · acceptance insight consultation</h2>
     <div class="panel">
       <div class="metric-value">${s.insightConsultation.consulted} / ${s.insightConsultation.eligible}${s.insightConsultation.rate == null ? " · no opportunity yet" : ` = ${Math.round(s.insightConsultation.rate * 100)}%`}</div>
-      <p class="note">Of the acceptance insights that had a subsequent recommendation to inform, how many were explicitly consulted.${s.insightConsultation.noOpportunity ? ` ${s.insightConsultation.noOpportunity} insight${s.insightConsultation.noOpportunity === 1 ? "" : "s"} with no subsequent recommendation yet ${s.insightConsultation.noOpportunity === 1 ? "is" : "are"} not counted as unconsulted.` : ""} This measures whether the learning loop is used, not whether it improves matching. Recommendation quality and accepted-to-meeting outcomes are later-validation questions, not two-week claims.</p>
+      <p class="note">Of the acceptance insights that had a subsequent recommendation to inform, how many were explicitly consulted.${s.insightConsultation.noOpportunity ? ` ${s.insightConsultation.noOpportunity} insight${s.insightConsultation.noOpportunity === 1 ? "" : "s"} with no subsequent recommendation yet ${s.insightConsultation.noOpportunity === 1 ? "is" : "are"} not counted as unconsulted.` : ""} This measures whether the learning loop is used, not whether it improves matching.</p>
     </div>
 
     ${ref}`;
@@ -505,8 +615,8 @@ function positiveStrip(rv) {
   }
   const items = pos
     .map((p) => {
-      if (p.source === "stated_preference") {
-        return `<span class="pos-item"><span class="pos-source">matches stated preference</span> ${esc(dimLabel(p.dimension))}${p.detail ? `: ${esc(p.detail)}` : ""}</span>`;
+      if (p.source === "criterion") {
+        return `<span class="pos-item"><span class="pos-source">${p.confirmed ? "meets a confirmed preference" : "meets a stated preference"}</span> ${esc(dimLabel(p.dimension))}${p.detail ? `: ${esc(p.detail)}` : ""}</span>`;
       }
       return `<span class="pos-item"><span class="pos-source">accepted before</span> ${esc(dimLabel(p.dimension))}${p.detail ? ` · ${esc(p.detail)}` : ""}</span>`;
     })
@@ -514,21 +624,34 @@ function positiveStrip(rv) {
   return `<div class="evidence-strip"><span class="strip-label">Supports sending</span>${items}</div>`;
 }
 
+// The reason a finding appeared, written by the decision layer so the screen
+// never has to reconstruct it.
 function findingLine(f) {
+  if (f.sentence) return esc(f.sentence);
   const label = dimLabel(f.dimension);
-  if (f.type === "conflict") {
-    return `<strong>Conflict on ${esc(label)}:</strong> this candidate is ${esc(f.value)}, and the client confirmed ${esc(f.value)} is a dealbreaker.`;
-  }
-  if (f.type === "preference_mismatch") {
-    return `<strong>Preference mismatch on ${esc(label)}:</strong> this candidate is ${esc(f.value)}, the client prefers ${esc(f.preference.value)}.`;
-  }
   if (f.type === "incomplete") {
     return `<strong>Missing information on ${esc(label)}:</strong> ${esc(f.detail)}.`;
   }
-  if (f.type === "contradiction") {
-    return `<strong>Contradiction on ${esc(label)}:</strong> rejected ${f.rejections.length} here, then accepted one on the same dimension.`;
+  return `On ${esc(label)}, this candidate is ${esc(f.value)}.`;
+}
+
+// The client's own words, and where the criterion came from.
+function criterionEvidence(criterion) {
+  if (!criterion) return "";
+  const kindLabel =
+    criterion.kind === "confirmed_dealbreaker"
+      ? "confirmed dealbreaker"
+      : criterion.kind === "confirmed_preference"
+        ? "confirmed preference"
+        : "stated preference";
+  const dir = criterion.operator === "must_not_be" ? "must not be" : "must be";
+  const vals = (criterion.values || []).join(" or ");
+  let html = `<p class="criterion-line"><span class="pos-source">${esc(kindLabel)}</span> ${esc(dimLabel(criterion.dimension))} ${esc(dir)} ${esc(vals)}</p>`;
+  if (criterion.note) {
+    html += `<p class="q">“${esc(criterion.note)}”</p>`;
   }
-  return `<strong>Prior rejection on ${esc(label)}:</strong> ${f.rejections ? f.rejections.length : 0} earlier rejection${f.rejections && f.rejections.length === 1 ? "" : "s"} on this dimension.${f.note ? " " + esc(f.note) + "." : ""}`;
+  html += `<p class="muted small">${criterion.source === "client_answer" ? "confirmed by the client" : "recorded at intake"}${criterion.recordedBy ? " by " + esc(criterion.recordedBy) : ""}${criterion.recordedAt ? " · " + relTime(criterion.recordedAt) : ""}</p>`;
+  return html;
 }
 
 function insightsStrip(insights) {
@@ -554,9 +677,18 @@ function insightsStrip(insights) {
   </div>`;
 }
 
-function openSend(clientId, cand, reviewOverride) {
+async function openSend(clientId, cand, reviewOverride) {
   const rv = reviewOverride || cand.review;
   const cl = client(clientId);
+
+  // The card was opened, so the matchmaker looked at whatever it had to say.
+  // This is the evidence the adoption guardrail is built on, so it is recorded
+  // before anything can be sent.
+  await action("record_card_view", {
+    clientId,
+    candidateId: cand.id,
+    surfaced: rv.surface !== false,
+  });
 
   // Control-arm clients never see ledger evidence. The review is still computed
   // server-side for measurement, but the matchmaker gets a plain confirmation.
@@ -597,18 +729,22 @@ function openSend(clientId, cand, reviewOverride) {
     const clientRec = client(clientId);
     const others = rv.findings.slice(1);
     const alsoHtml = others.length
-      ? `<div class="also-flagged">${others.map((f) => `<div>${findingLine(f)}</div>`).join("")}</div>`
+      ? `<div class="also-flagged"><div class="also-label">Also flagged</div>${others.map((f) => `<div>${findingLine(f)}</div>`).join("")}</div>`
       : "";
-
+    const critHtml = criterionEvidence(finding.criterion);
+    const overrideField = `
+      <div class="field">
+        <label for="override-reason">Why are you sending this anyway?</label>
+        <input id="override-reason" type="text" placeholder="Optional, but it is what makes the override reviewable" />
+        <div class="muted small">Recorded with the override, and reported back in the measurement view.</div>
+      </div>`;
     if (rv.state === "conflict") {
-      const pref = (clientRec.preferences || []).find(
-        (p) => p.kind === "confirmed_dealbreaker" && p.dimension === finding.dimension
-      );
       body = `
         <div class="card-state conflict"><h3>Conflict · ${esc(dim)}</h3></div>
         <div class="evidence">
-          <p>This client has a <strong>confirmed dealbreaker</strong> on ${esc(dim)}${pref && pref.note ? `: <span class="q">“${esc(pref.note)}”</span>` : "."}</p>
-          <p>The candidate is <strong>${esc(finding.value)}</strong>${pref && pref.value ? `, and the client confirmed <strong>${esc(pref.value)}</strong> is a dealbreaker` : ""}. The comparison is on the value, not on the category.</p>
+          <p>${findingLine(finding)}</p>
+          ${critHtml}
+          <p>The comparison is on the value and in the direction the client set, not on the category.</p>
         </div>${alsoHtml}`;
       actions = `<button class="btn secondary" data-proceed>Send anyway</button><button class="btn" data-hold>Hold</button>`;
     } else if (rv.state === "contradiction") {
@@ -624,6 +760,7 @@ function openSend(clientId, cand, reviewOverride) {
       body = `
         <div class="card-state contradiction"><h3>Contradiction · ${esc(dim)}</h3></div>
         <div class="evidence">
+          <p>${findingLine(finding)}</p>
           <p>This client <strong>rejected ${row ? row.rejectedCount : "this dimension"} profiles</strong> on ${esc(dim)}, then <strong>accepted ${row ? row.acceptedCount : "one"} later</strong>.</p>
           <div class="compare">
             <div class="side rejected">
@@ -644,16 +781,18 @@ function openSend(clientId, cand, reviewOverride) {
       body = `
         <div class="card-state repeat"><h3>Preference mismatch · ${esc(dim)}</h3></div>
         <div class="evidence">
-          <p>This candidate is <strong>${esc(finding.value)}</strong>. The client's stated preference is <strong>${esc(finding.preference.value)}</strong>${finding.preference.note ? `: <span class="q">“${esc(finding.preference.note)}”</span>` : "."}</p>
-          <p>${finding.advisory ? "This is a stated preference, not a confirmed dealbreaker, so it is advice rather than a warning." : "This is a client-confirmed preference."} It does not block a send.</p>
+          <p>${findingLine(finding)}</p>
+          ${critHtml}
+          <p>${finding.basis === "stated_preference" ? "This is a stated preference rather than a confirmed one, so it is advice and not a warning." : "The client confirmed this preference, but it is a criterion they hold rather than a no."} It does not block a send.</p>
         </div>${alsoHtml}`;
       actions = `<button class="btn" data-proceed>Send anyway</button><button class="btn secondary" data-ask>Ask the client</button><button class="btn ghost" data-hold>Hold</button>`;
     } else if (rv.state === "incomplete") {
       body = `
         <div class="card-state no_history"><h3>Information missing · ${esc(dim)}</h3></div>
         <div class="evidence">
-          <p>${esc(finding.detail)}.</p>
-          <p>The client has something recorded here, and we cannot check the candidate against it. Unknown is not the same as compatible, so it is worth a moment before sending.</p>
+          <p>${findingLine(finding)}</p>
+          ${critHtml}
+          <p>Unknown is not the same as compatible, so it is worth a moment before sending.</p>
         </div>${alsoHtml}`;
       actions = `<button class="btn" data-proceed>Send anyway</button><button class="btn secondary" data-close>Hold</button>`;
     } else {
@@ -661,11 +800,14 @@ function openSend(clientId, cand, reviewOverride) {
       body = `
         <div class="card-state repeat"><h3>Prior rejection · ${esc(dim)}</h3></div>
         <div class="evidence">
-          <p>This client has rejected this dimension before${finding.severity ? `, most recently as <strong>${SEV_LABEL[finding.severity]}</strong>` : ""}.</p>
+          <p>${findingLine(finding)}</p>
           <p>This is an unconfirmed pattern, not a confirmed dealbreaker. It does not block a send.</p>
         </div>${alsoHtml}`;
       actions = `<button class="btn" data-proceed>Send anyway</button><button class="btn secondary" data-ask>Ask the client</button><button class="btn ghost" data-hold>Hold</button>`;
     }
+    // Any card that shows a warning can be overridden, so any of them can
+    // carry a reason. A reason is what makes the override reviewable later.
+    body += overrideField;
   }
 
   openModal(`
@@ -677,7 +819,14 @@ function openSend(clientId, cand, reviewOverride) {
 
   const send = () => {
     const consulted = [...$modal.querySelectorAll(".consult-check:checked")].map((el) => el.getAttribute("data-insight"));
-    sendAndResolve(clientId, cand.id, "proceed", "Send reviewed", consulted);
+    const reasonEl = $modal.querySelector("#override-reason");
+    const reason = reasonEl ? reasonEl.value.trim() : "";
+    const rationale = reason
+      ? reason
+      : rv.state === "conflict"
+        ? "Sent anyway, no reason given"
+        : "Send reviewed";
+    sendAndResolve(clientId, cand.id, "proceed", rationale, consulted);
   };
   const ask = () => openAnswer(clientId, cand, rv.findings[0] ? rv.findings[0].dimension : null);
   const hold = () => holdSend(clientId, cand.id);
@@ -1145,10 +1294,11 @@ function openPreferenceEditor(clientId) {
   const cl = client(clientId);
   const dims = state.dimensions || [];
   const existing = (cl.preferences || []).filter((p) => p.status === "active");
+  let chosen = [];
 
   openModal(`
     <h2>Record what ${esc(cl.name)} said</h2>
-    <p class="muted small">A preference is advice you can still trade against. A dealbreaker is an explicit no, and only the client can give one. Changing a criterion here is recorded with what it replaced.</p>
+    <p class="muted small">A criterion has a direction and a level of firmness, and they are separate. "Must be vegetarian" and "must not be vegetarian" are opposite criteria, and only one of them can be right.</p>
     <form id="pref-form" novalidate>
       <div class="field">
         <label for="p-dim">Which dimension</label>
@@ -1157,16 +1307,26 @@ function openPreferenceEditor(clientId) {
         </select>
       </div>
       <div class="field">
-        <label for="p-val">Which value</label>
-        <select id="p-val"></select>
+        <label for="p-op">Which direction</label>
+        <select id="p-op">
+          <option value="must_be">The partner must be ...</option>
+          <option value="must_not_be">The partner must not be ...</option>
+        </select>
+        <div class="muted small" id="p-op-hint"></div>
       </div>
       <div class="field">
-        <label>What did the client say it is</label>
+        <label>Which values</label>
+        <div class="dim-picker" id="p-value-picker"></div>
+        <div class="muted small" id="p-value-hint"></div>
+      </div>
+      <div class="field">
+        <label>How firm did the client make it</label>
         <div class="severity-row">
-          <label><input type="radio" name="kind" value="stated_preference" checked /> Preference</label>
+          <label><input type="radio" name="kind" value="stated_preference" checked /> Stated preference</label>
+          <label><input type="radio" name="kind" value="confirmed_preference" /> Confirmed preference</label>
           <label><input type="radio" name="kind" value="confirmed_dealbreaker" /> Confirmed dealbreaker</label>
         </div>
-        <div class="muted small">An ordinary preference is advice. A confirmed dealbreaker stops the profile going out.</div>
+        <div class="muted small">Only a confirmed dealbreaker is treated as a firm no. The other two are advice, and the card always says which is which.</div>
       </div>
       <div class="field">
         <label for="p-note">The client's own words <span class="muted small">(recommended)</span></label>
@@ -1175,11 +1335,8 @@ function openPreferenceEditor(clientId) {
       ${
         existing.length
           ? `<div class="field"><label>Already on file</label>${existing
-              .map(
-                (p) =>
-                  `<div class="muted small">${esc(dimLabel(p.dimension))} · ${p.kind === "confirmed_dealbreaker" ? "confirmed dealbreaker" : "preference"} · ${esc(p.value || "")}</div>`
-              )
-              .join("")}<div class="muted small">Saving over one of these replaces it and records the change.</div></div>`
+              .map((p) => `<div class="muted small">${esc(dimLabel(p.dimension))} · ${esc(criterionText(p))}</div>`)
+              .join("")}<div class="muted small">Saving over one of these replaces it and records the change, and the old version stays readable with the date it was in force.</div></div>`
           : ""
       }
       <div class="form-error" role="alert" hidden></div>
@@ -1190,22 +1347,66 @@ function openPreferenceEditor(clientId) {
     </form>`);
 
   const root = $modal.querySelector(".modal");
+  const dimSel = root.querySelector("#p-dim");
+  const opSel = root.querySelector("#p-op");
+  const picker = root.querySelector("#p-value-picker");
+  const opHint = root.querySelector("#p-op-hint");
+  const valHint = root.querySelector("#p-value-hint");
+
+  function renderPicker() {
+    const values = dimensionValues(dimSel.value);
+    picker.innerHTML = values
+      .map((v) => `<span class="dim-chip${chosen.indexOf(v) !== -1 ? " selected" : ""}" data-val="${esc(v)}">${esc(v)}</span>`)
+      .join("");
+    picker.querySelectorAll(".dim-chip").forEach((chip) =>
+      chip.addEventListener("click", () => {
+        const v = chip.getAttribute("data-val");
+        const at = chosen.indexOf(v);
+        if (at === -1) chosen.push(v);
+        else chosen.splice(at, 1);
+        renderPicker();
+      })
+    );
+    const dir = opSel.value === "must_not_be" ? "must not be" : "must be";
+    valHint.textContent = chosen.length
+      ? `The partner ${dir} ${chosen.join(" or ")}.`
+      : "Pick at least one value. Pick several for a set, for example two kinds of smoker.";
+  }
+
+  function renderOpHint() {
+    opHint.textContent =
+      opSel.value === "must_not_be"
+        ? "Use this when the client refuses a value. Any of the values below is a no."
+        : "Use this when the client requires a value. A candidate with any other value does not meet the criterion.";
+    renderPicker();
+  }
+
+  dimSel.addEventListener("change", () => {
+    chosen = [];
+    renderPicker();
+  });
+  opSel.addEventListener("change", renderOpHint);
+  renderOpHint();
+
   root.querySelector("[data-close]").addEventListener("click", closeModal);
-  wireDimensionValue(root.querySelector("#p-dim"), root.querySelector("#p-val"));
   root.querySelector("#pref-form").addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (!chosen.length) {
+      showFormError(root, "Pick at least one value for the criterion.");
+      return;
+    }
     const res = await action("set_preference", {
       clientId,
-      dimension: root.querySelector("#p-dim").value,
-      value: root.querySelector("#p-val").value,
+      dimension: dimSel.value,
+      operator: opSel.value,
+      values: chosen,
       kind: root.querySelector('input[name="kind"]:checked').value,
       note: root.querySelector("#p-note").value,
     });
     if (!res.ok) return showFormError(root, res.message);
-    const dim = root.querySelector("#p-dim").value;
-    const val = root.querySelector("#p-val").value;
+    const summary = `${dimLabel(dimSel.value)} ${opSel.value === "must_not_be" ? "must not be" : "must be"} ${chosen.join(" or ")}`;
     closeModal();
-    showToast(`Saved: ${dimLabel(dim)} · ${val}.`);
+    showToast(`Saved: ${summary}.`);
     render();
   });
 }
@@ -1346,6 +1547,45 @@ $app.addEventListener("click", async (e) => {
     }
     return;
   }
+  const armEl = e.target.closest("[data-set-arm]");
+  if (armEl) {
+    const clientId = armEl.getAttribute("data-client");
+    const arm = armEl.getAttribute("data-set-arm");
+    const res = await action("set_arm", { clientId, arm });
+    if (res.ok) {
+      showToast(
+        arm === "control"
+          ? "Moved to the control arm. The check is still computed for this client, but it is not shown."
+          : "Moved to the intervention arm. The check is shown before sending."
+      );
+    } else {
+      showToast(res.message);
+    }
+    render();
+    return;
+  }
+  const confirmAudit = e.target.closest("[data-audit-confirm]");
+  if (confirmAudit) {
+    const res = await action("confirm_audit", {
+      auditId: confirmAudit.getAttribute("data-audit-confirm"),
+      humanConfirmed: true,
+    });
+    if (res.ok) showToast("Audit confirmed.");
+    else showToast(res.message);
+    render();
+    return;
+  }
+  const disputeAudit = e.target.closest("[data-audit-dispute]");
+  if (disputeAudit) {
+    const res = await action("confirm_audit", {
+      auditId: disputeAudit.getAttribute("data-audit-dispute"),
+      humanConfirmed: false,
+    });
+    if (res.ok) showToast("Audit disputed. It stays in the denominator and is reported separately.");
+    else showToast(res.message);
+    render();
+    return;
+  }
   const checkEl = e.target.closest("[data-check]");
   if (checkEl) {
     const candId = checkEl.getAttribute("data-check");
@@ -1359,13 +1599,13 @@ $app.addEventListener("click", async (e) => {
       return;
     }
     const review = await res.json();
-    openSend(clientId, candidate(candId), review);
+    await openSend(clientId, candidate(candId), review);
     return;
   }
   const sendEl = e.target.closest("[data-send]");
   if (sendEl) {
     const cand = client(currentClientId).queue.find((q) => q.id === sendEl.getAttribute("data-send"));
-    openSend(currentClientId, cand);
+    await openSend(currentClientId, cand);
     return;
   }
   const acceptEl = e.target.closest("[data-accept]");

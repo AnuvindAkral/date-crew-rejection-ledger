@@ -31,7 +31,7 @@ test("scenario 2: a profile that conflicts with a softer preference", () => {
   assert.equal(result.state, "preference_mismatch");
   const finding = result.findings[0];
   assert.equal(finding.dimension, "values_intent");
-  assert.equal(finding.advisory, true);
+  assert.equal(finding.basis, "stated_preference");
 });
 
 test("scenario 3: the relevant profile attribute is unknown", () => {

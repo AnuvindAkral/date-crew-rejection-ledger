@@ -86,7 +86,8 @@ function buildBootstrap(store) {
       arm: c.arm,
       matchmakerId: c.matchmakerId,
       matchmakerName: mm ? mm.name : null,
-      preferences: store.preferences(c.id),
+      preferences: store.activeCriteria(c.id),
+      criterionHistory: store.criterionHistory(c.id),
       preferenceEvents: store.preferenceEvents(c.id),
       confirmations: store.confirmations(c.id),
       rejections: store.rejections(c.id),
@@ -101,6 +102,7 @@ function buildBootstrap(store) {
       ledger: buildLedger(store, c.id),
       metricA: computeMetricA(store, c.id),
       arcr: computeArcr(store, c.id),
+      audits: store.auditsFor(c.id),
       queue: queue.map((cand) => ({
         ...cand,
         dimensions: candidateDimensions(cand),
@@ -119,6 +121,7 @@ function buildBootstrap(store) {
     severities: SEVERITIES,
     matchmakers: store.matchmakers(),
     session: computeSessionMetrics(store),
+    audits: store.state.audits,
     // Candidates carry a dimensions list derived from their attributes, so the
     // interface and the server agree on what a candidate says something about.
     candidates: store.state.candidates.map((c) => ({ ...c, dimensions: candidateDimensions(c) })),

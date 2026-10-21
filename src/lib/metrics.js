@@ -2,11 +2,212 @@
 
 const { candidateDimensions } = require("./rules");
 
-// Metric computations for the measurement view and the test suite. These mirror
-// GATE_B_METRICS.md. ARCR measures recurrence, not avoidability. The sub-rates
-// are mutually exclusive and follow the same precedence as the send-review card:
-// hard (confirmed dealbreaker) > settled (confirmed preference) > contradiction
-// (prior rejection then later acceptance) > plain (prior rejection only).
+// Measurement for the pilot.
+//
+// The problem with a metric computed over the profiles a matchmaker chose to
+// check is that it improves when they stop checking. So the primary outcome is
+// not a rate over checked profiles. It is:
+//
+//   the proportion of ALL profiles shared in the measurement window that
+//   contain a conflict with a criterion the client had on file at the time,
+//   determined by re-applying the same rules to every share after the fact.
+//
+// Every share is audited, whatever arm the client is on and whether or not the
+// card was ever shown. The audit reads the client's file as it stood at the
+// moment of the share, so a criterion that was changed later is judged by what
+// it was then. The denominator is every share, so a matchmaker who sends less
+// cannot improve the number, and a matchmaker who stops using the card cannot
+// either.
+//
+// The adoption guardrail is reported separately, because that is the thing
+// that can move on its own. A primary rate that falls while adoption falls
+// is not a result, and the two are shown side by side so that is visible.
+
+const PERIOD_BASELINE = "baseline";
+const PERIOD_MEASUREMENT = "measurement";
+
+function emptyBucket() {
+  return {
+    shares: 0,
+    audited: 0,
+    unaudited: 0,
+    conflictShares: 0,
+    hardConflictShares: 0,
+    softMismatchShares: 0,
+    unknownShares: 0,
+    cleanShares: 0,
+    confirmedAudits: 0,
+    confirmedConflictShares: 0,
+    historyFindings: 0,
+  };
+}
+
+function finalise(b) {
+  return {
+    ...b,
+    // The primary outcome. Denominator is every share in the period.
+    rate: b.shares ? (b.conflictShares / b.shares) * 100 : null,
+    hardRate: b.shares ? (b.hardConflictShares / b.shares) * 100 : null,
+    softRate: b.shares ? (b.softMismatchShares / b.shares) * 100 : null,
+    // How much of the period could be judged at all.
+    auditCoverage: b.shares ? (b.audited / b.shares) * 100 : null,
+    // How much of it was judged by a person as well as by the rules.
+    humanConfirmedRate: b.confirmedAudits
+      ? (b.confirmedConflictShares / b.confirmedAudits) * 100
+      : null,
+    unknownRate: b.shares ? (b.unknownShares / b.shares) * 100 : null,
+  };
+}
+
+function periodOf(store, share) {
+  const pilotStart = new Date(store.state.meta.pilotStart || 0).getTime();
+  return new Date(share.sharedAt).getTime() >= pilotStart ? PERIOD_MEASUREMENT : PERIOD_BASELINE;
+}
+
+// Did the matchmaker open the card, with the check on it, before this profile
+// went out? The card view is the evidence.
+function wasCheckedBeforeSending(store, share) {
+  const sharedAt = new Date(share.sharedAt).getTime();
+  return store.state.cardViews.some(
+    (v) =>
+      v.clientId === share.clientId &&
+      v.candidateId === share.candidateId &&
+      v.surfaced === true &&
+      new Date(v.at).getTime() <= sharedAt
+  );
+}
+
+function computeOutcomeMetrics(store) {
+  const buckets = {
+    [PERIOD_BASELINE]: { intervention: emptyBucket(), control: emptyBucket() },
+    [PERIOD_MEASUREMENT]: { intervention: emptyBucket(), control: emptyBucket() },
+  };
+  const all = emptyBucket();
+  const byMatchmaker = new Map();
+  const byClient = new Map();
+  const overrides = [];
+
+  const auditByShare = new Map(store.state.audits.map((a) => [a.shareId, a]));
+
+  for (const share of store.state.shares) {
+    const clientRec = store.client(share.clientId);
+    const arm = clientRec && clientRec.arm === "control" ? "control" : "intervention";
+    const period = periodOf(store, share);
+    const audit = auditByShare.get(share.id);
+
+    const targets = [buckets[period][arm], all];
+    const mmKey = share.actor || "unknown";
+    if (!byMatchmaker.has(mmKey)) byMatchmaker.set(mmKey, emptyBucket());
+    targets.push(byMatchmaker.get(mmKey));
+    if (!byClient.has(share.clientId)) byClient.set(share.clientId, emptyBucket());
+    targets.push(byClient.get(share.clientId));
+
+    for (const b of targets) {
+      b.shares += 1;
+      if (!audit) {
+        b.unaudited += 1;
+        continue;
+      }
+      b.audited += 1;
+      if (audit.classification === "hard_conflict") {
+        b.conflictShares += 1;
+        b.hardConflictShares += 1;
+      } else if (audit.classification === "soft_mismatch") {
+        b.conflictShares += 1;
+        b.softMismatchShares += 1;
+      } else if (audit.classification === "unknown") {
+        b.unknownShares += 1;
+      } else {
+        b.cleanShares += 1;
+      }
+      if (audit.humanConfirmed === true) {
+        b.confirmedAudits += 1;
+        if (audit.classification === "hard_conflict" || audit.classification === "soft_mismatch") {
+          b.confirmedConflictShares += 1;
+        }
+      }
+      b.historyFindings += audit.history || 0;
+    }
+  }
+
+  // The adoption guardrail. Only the intervention arm could have had the
+  // check consulted; the control arm is reported at zero by design.
+  const adoption = { intervention: emptyAdoption(), control: emptyAdoption() };
+  for (const share of store.state.shares) {
+    if (periodOf(store, share) !== PERIOD_MEASUREMENT) continue;
+    const clientRec = store.client(share.clientId);
+    const arm = clientRec && clientRec.arm === "control" ? "control" : "intervention";
+    adoption[arm].eligible += 1;
+    if (wasCheckedBeforeSending(store, share)) adoption[arm].checked += 1;
+  }
+
+  // Overrides: a warning was on the card and the profile went anyway. The
+  // level says how firm the warning was, because an override of a firm no is
+  // a different thing from an override of a pattern.
+  for (const res of store.state.resolutions) {
+    if (res.action !== "proceed") continue;
+    if (periodOf(store, { sharedAt: res.resolvedAt }) !== PERIOD_MEASUREMENT) continue;
+    const chk = res.check;
+    if (!chk || !chk.flagged) continue;
+    let level = "advisory";
+    if (chk.dealbreakerConflicts > 0) level = "dealbreaker";
+    else if (chk.confirmedPreferenceMismatches > 0 || chk.state === "contradiction") {
+      level = "preference";
+    }
+    overrides.push({
+      clientId: res.clientId,
+      candidateId: res.candidateId,
+      level,
+      reason: res.rationale || "",
+      at: res.resolvedAt,
+    });
+  }
+  const overridesWithReason = overrides.filter((o) => o.reason && o.reason.trim()).length;
+
+  return {
+    window: {
+      pilotStart: store.state.meta.pilotStart,
+      baseline: finalise(buckets[PERIOD_BASELINE].intervention),
+      baselineControl: finalise(buckets[PERIOD_BASELINE].control),
+      measurement: finalise(buckets[PERIOD_MEASUREMENT].intervention),
+      measurementControl: finalise(buckets[PERIOD_MEASUREMENT].control),
+      overall: finalise(all),
+    },
+    adoption: {
+      intervention: {
+        eligible: adoption.intervention.eligible,
+        checked: adoption.intervention.checked,
+        rate: adoption.intervention.eligible
+          ? (adoption.intervention.checked / adoption.intervention.eligible) * 100
+          : null,
+      },
+      control: {
+        eligible: adoption.control.eligible,
+        checked: adoption.control.checked,
+        rate: adoption.control.eligible ? (adoption.control.checked / adoption.control.eligible) * 100 : null,
+      },
+    },
+    overrides: {
+      count: overrides.length,
+      dealbreaker: overrides.filter((o) => o.level === "dealbreaker").length,
+      preference: overrides.filter((o) => o.level === "preference").length,
+      advisory: overrides.filter((o) => o.level === "advisory").length,
+      withReason: overridesWithReason,
+      detail: overrides,
+    },
+    byMatchmaker: Array.from(byMatchmaker.entries()).map(([name, b]) => ({ name, ...finalise(b) })),
+    byClient: Array.from(byClient.entries()).map(([id, b]) => {
+      const c = store.client(id);
+      return { clientId: id, name: c ? c.name : id, ...finalise(b) };
+    }),
+  };
+}
+
+function emptyAdoption() {
+  return { eligible: 0, checked: 0 };
+}
+
+// ---- earlier diagnostics, kept because they answer different questions ----
 
 function activePrefs(store, clientId) {
   return store.preferences(clientId).filter((p) => p.status === "active");
@@ -24,7 +225,7 @@ function earliestShareFor(store, clientId, candidateId, beforeTime) {
 function acceptanceDims(store, a) {
   if (a.dimension) return [a.dimension];
   const cand = store.candidate(a.candidateId);
-  return cand ? cand.dimensions : [];
+  return cand ? candidateDimensions(cand) : [];
 }
 
 // The value a candidate carried on a dimension, or null when it is not known.
@@ -35,6 +236,10 @@ function rejectedCandidateValue(store, candidateId, dimension) {
   return v === undefined || v === null ? null : v;
 }
 
+// The post-hoc version of the brief's 35% figure: rejections whose reason was
+// already in the client's recorded preferences at rejection time. The
+// denominator is rejections, not shares, and it is a diagnostic rather than
+// the primary outcome.
 function computeMetricA(store, clientId) {
   const rejections = store.rejections(clientId);
   const prefs = activePrefs(store, clientId);
@@ -65,6 +270,8 @@ function computeMetricA(store, clientId) {
   };
 }
 
+// Recurrence, not avoidability. Reported with the evidence that was available
+// at share time.
 function computeArcr(store, clientId) {
   const shares = store.shares(clientId);
   const rejections = store.rejections(clientId);
@@ -101,7 +308,9 @@ function computeArcr(store, clientId) {
     const hardAtShare = prefs.some((p) => {
       if (p.kind !== "confirmed_dealbreaker" || !p.confirmed) return false;
       if (new Date(p.confirmedAt || p.recordedAt) >= shareTime) return false;
-      if (rejectedValue && p.value) return rejectedValue === p.value;
+      if (rejectedValue && p.values && p.values.length) {
+        return p.values.indexOf(rejectedValue) !== -1;
+      }
       return true;
     });
     if (hardAtShare) {
@@ -111,7 +320,7 @@ function computeArcr(store, clientId) {
 
     const settledAtShare = prefs.some(
       (p) =>
-        p.kind === "stated_preference" &&
+        p.kind === "confirmed_preference" &&
         p.confirmed &&
         p.dimension === dim &&
         new Date(p.confirmedAt || p.recordedAt) < shareTime
@@ -148,129 +357,6 @@ function computeArcr(store, clientId) {
   };
 }
 
-// The primary metric, measured at the moment of sending.
-//
-// Confirmed-criterion conflict rate at send time =
-//   (profiles shared where the send-time check reported a conflict against a
-//    client-confirmed criterion) / (profiles shared and checked) x 100
-//
-// The check is recomputed by the server at share time, so this is a fact about
-// the send rather than a claim by the interface. The two components are kept
-// apart: a conflict against a confirmed dealbreaker, and a mismatch against a
-// confirmed preference. Ordinary stated preferences and prior-rejection
-// history are advisory and are not in the numerator.
-//
-// The denominator is the profiles that were checked. A share with no check has
-// an unknown conflict status, so it is reported as its own count rather than
-// folded in, and coverage is reported alongside. Counting unchecked shares in
-// the denominator would make the rate look better the less the tool was used.
-//
-// A share where the check could not be made (a missing candidate attribute) is
-// not counted as clean. It is reported as its own bucket so the rate is never
-// flattered by missing data.
-function emptySendBucket() {
-  return {
-    shared: 0,
-    checked: 0,
-    notChecked: 0,
-    conflictShares: 0,
-    dealbreakerConflictShares: 0,
-    preferenceConflictShares: 0,
-    unknownShares: 0,
-    advisoryShares: 0,
-    cleanShares: 0,
-    detectedPairs: 0,
-    sharedConflictPairs: 0,
-  };
-}
-
-function finaliseSendBucket(b) {
-  return {
-    ...b,
-    rate: b.checked ? (b.conflictShares / b.checked) * 100 : null,
-    dealbreakerRate: b.checked ? (b.dealbreakerConflictShares / b.checked) * 100 : null,
-    preferenceRate: b.checked ? (b.preferenceConflictShares / b.checked) * 100 : null,
-    // How much of what was shared was actually checked.
-    coverage: b.shared ? (b.checked / b.shared) * 100 : null,
-    // Of the conflicts the tool put in front of the matchmaker, how many still
-    // went to the client.
-    overrideRate: b.detectedPairs ? (b.sharedConflictPairs / b.detectedPairs) * 100 : null,
-  };
-}
-
-function computeSendTimeMetrics(store) {
-  const buckets = { intervention: emptySendBucket(), control: emptySendBucket() };
-  const perClient = [];
-
-  for (const client of store.state.clients) {
-    const arm = client.arm === "control" ? "control" : "intervention";
-    const b = buckets[arm];
-    const clientBucket = emptySendBucket();
-    const detectedPairs = new Set();
-    const sharedConflictPairs = new Set();
-
-    for (const s of store.state.shares) {
-      if (s.clientId !== client.id) continue;
-      b.shared += 1;
-      clientBucket.shared += 1;
-      if (!s.check) {
-        b.notChecked += 1;
-        clientBucket.notChecked += 1;
-        continue;
-      }
-      b.checked += 1;
-      clientBucket.checked += 1;
-      if (s.check.confirmedConflicts > 0) {
-        b.conflictShares += 1;
-        clientBucket.conflictShares += 1;
-        if (s.check.dealbreakerConflicts > 0) {
-          b.dealbreakerConflictShares += 1;
-          clientBucket.dealbreakerConflictShares += 1;
-        }
-        if (s.check.confirmedPreferenceMismatches > 0) {
-          b.preferenceConflictShares += 1;
-          clientBucket.preferenceConflictShares += 1;
-        }
-        sharedConflictPairs.add(s.candidateId);
-      } else if (s.check.state === "incomplete") {
-        b.unknownShares += 1;
-        clientBucket.unknownShares += 1;
-      } else if (s.check.state === "clean") {
-        b.cleanShares += 1;
-        clientBucket.cleanShares += 1;
-      } else {
-        b.advisoryShares += 1;
-        clientBucket.advisoryShares += 1;
-      }
-    }
-
-    // Cards the matchmaker closed. A confirmed conflict on a card is a conflict
-    // the tool detected before the profile could go out.
-    for (const r of store.state.resolutions) {
-      if (r.clientId !== client.id) continue;
-      if (r.check && r.check.confirmedConflicts > 0) detectedPairs.add(r.candidateId);
-    }
-
-    b.detectedPairs += detectedPairs.size;
-    b.sharedConflictPairs += sharedConflictPairs.size;
-    clientBucket.detectedPairs = detectedPairs.size;
-    clientBucket.sharedConflictPairs = sharedConflictPairs.size;
-
-    perClient.push({
-      clientId: client.id,
-      name: client.name,
-      arm,
-      ...finaliseSendBucket(clientBucket),
-    });
-  }
-
-  return {
-    intervention: finaliseSendBucket(buckets.intervention),
-    control: finaliseSendBucket(buckets.control),
-    perClient,
-  };
-}
-
 function computeSessionMetrics(store) {
   const rejections = store.state.rejections;
   const latencies = rejections
@@ -288,10 +374,12 @@ function computeSessionMetrics(store) {
     insights: store.state.insights.length,
     confirmations: store.state.confirmations.length,
     resolutions: store.state.resolutions.length,
+    cardViews: store.state.cardViews.length,
+    audits: store.state.audits.length,
     auditEvents: store.state.audit.length,
     medianCaptureLatencyMs: median,
     insightConsultation: computeInsightConsultation(store),
-    sendTime: computeSendTimeMetrics(store),
+    outcome: computeOutcomeMetrics(store),
   };
 }
 
@@ -333,5 +421,7 @@ module.exports = {
   computeArcr,
   computeSessionMetrics,
   computeInsightConsultation,
-  computeSendTimeMetrics,
+  computeOutcomeMetrics,
+  PERIOD_BASELINE,
+  PERIOD_MEASUREMENT,
 };

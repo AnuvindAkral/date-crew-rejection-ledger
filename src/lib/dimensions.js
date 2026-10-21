@@ -55,6 +55,12 @@ const DIMENSIONS = [
     values: ["Vegetarian", "Non-vegetarian", "Vegan", "Eggetarian"],
   },
   {
+    key: "smoking_habit",
+    label: "Smoking",
+    hint: "Whether the person smokes",
+    values: ["Non-smoker", "Occasional smoker", "Regular smoker"],
+  },
+  {
     key: "appearance_grooming",
     label: "Appearance or grooming",
     hint: "How someone presents themselves",

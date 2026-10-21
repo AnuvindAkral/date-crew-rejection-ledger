@@ -136,7 +136,8 @@ function applyAction(body) {
       store.setPreference({
         clientId: p.clientId,
         dimension: p.dimension,
-        value: p.value,
+        operator: p.operator,
+        values: p.values,
         kind: p.kind,
         note: p.note,
         actor,
@@ -149,6 +150,28 @@ function applyAction(body) {
         preferenceId: p.preferenceId,
         actor,
       });
+      break;
+    case "record_card_view":
+      store.recordCardView({
+        clientId: p.clientId,
+        candidateId: p.candidateId,
+        surfaced: p.surfaced,
+        actor,
+      });
+      break;
+    case "run_audit":
+      store.runAudit({ by: actor });
+      break;
+    case "confirm_audit":
+      store.confirmAudit({
+        auditId: p.auditId,
+        humanConfirmed: p.humanConfirmed,
+        note: p.note,
+        by: actor,
+      });
+      break;
+    case "set_arm":
+      store.setArm({ clientId: p.clientId, arm: p.arm, actor });
       break;
     case "add_to_queue":
       store.addToQueue({ clientId: p.clientId, candidateId: p.candidateId });
@@ -208,7 +231,12 @@ const server = http.createServer(async (req, res) => {
       if (err instanceof InputError) {
         // A validation problem the matchmaker can fix. The message is written
         // for them, and names the field it belongs to.
-        sendJson(res, 400, { error: "invalid_input", message: err.message, field: err.field });
+        //
+        // The status is 200 because the request itself was handled. A refusal
+        // is a normal answer to a form, and a local prototype should not fill
+        // the browser console with red errors every time someone types a
+        // duplicate name. The error field is what the interface reads.
+        sendJson(res, 200, { ok: false, error: "invalid_input", message: err.message, field: err.field });
         return;
       }
       console.error("action failed:", err);

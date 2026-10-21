@@ -132,7 +132,7 @@ test("hard sub-rate uses confirmedAt, not recordedAt", () => {
 
 test("a recurrence on a confirmed-preference dimension is settled, not plain", () => {
   const store = customStore({
-    preferences: [{ id: "p", clientId: "c1", dimension: "location_city_tier", kind: "stated_preference", confirmed: true, status: "active", recordedAt: "2026-01-02T00:00:00Z", confirmedAt: "2026-01-02T00:00:00Z" }],
+    preferences: [{ id: "p", clientId: "c1", dimension: "location_city_tier", operator: "must_be", values: ["Bangalore metro"], kind: "confirmed_preference", confirmed: true, status: "active", recordedAt: "2026-01-02T00:00:00Z", confirmedAt: "2026-01-02T00:00:00Z" }],
     rejections: [
       { id: "r0", clientId: "c1", candidateId: "p1", dimension: "location_city_tier", severity: "preference", freeText: "", recordedAt: "2026-01-03T00:00:00Z", capturedBy: "aisha" },
       { id: "r1", clientId: "c1", candidateId: "p3", dimension: "location_city_tier", severity: "preference", freeText: "", recordedAt: "2026-01-06T00:00:00Z", capturedBy: "aisha" },

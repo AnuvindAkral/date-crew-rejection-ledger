@@ -15,7 +15,7 @@ test("bootstrap exposes candidates, dimensions and per-client review states", ()
   assert.ok(Array.isArray(b.candidates));
   assert.ok(b.candidates.length > 0);
   assert.ok(Array.isArray(b.dimensions));
-  assert.equal(b.dimensions.length, 12);
+  assert.equal(b.dimensions.length, 13);
 
   const priya = b.clients.find((c) => c.id === "c1");
   assert.ok(priya.queue.every((q) => typeof q.review === "object" && q.review.state));

@@ -3,7 +3,7 @@
 const fs = require("node:fs");
 
 const { DIMENSION_BY_KEY, dimensionValues } = require("./dimensions");
-const { evaluateSend } = require("./rules");
+const { evaluateSend, criteriaAt } = require("./rules");
 
 const DAY = 86400000;
 
@@ -27,13 +27,24 @@ function text(value, label, field) {
   return v;
 }
 
+// Older records carried a single value and no direction. The direction they
+// meant is recoverable: a dealbreaker forbade the value, a preference required
+// it. Migrating on load keeps an existing store readable.
+function normaliseCriterion(c) {
+  if (!c) return c;
+  if (Array.isArray(c.values) && c.operator) return c;
+  const values = Array.isArray(c.values) ? c.values : c.value ? [c.value] : [];
+  const operator =
+    c.operator || (c.kind === "confirmed_dealbreaker" ? "must_not_be" : "must_be");
+  return Object.assign({}, c, { values, operator });
+}
+
 // Build the default synthetic dataset. Every name, city, profession and note is
 // invented and clearly labelled synthetic. No real person or client data.
 //
-// Candidates carry attributes (a value for each dimension they have something
-// to say about). Clients carry preferences (a dimension, a value, and whether it
-// is an ordinary preference or a confirmed dealbreaker). The two are compared
-// as values, so "Non-vegetarian" can be told apart from "Vegetarian".
+// The dated history here is the baseline period: what a matchmaker did before
+// the check existed. It exists so the audit has something to audit, not to
+// suggest that anything was measured in a real pilot.
 function buildSeed(now = Date.now()) {
   const matchmakers = [
     { id: "m1", name: "Aisha Verma", initials: "AV" },
@@ -41,20 +52,20 @@ function buildSeed(now = Date.now()) {
   ];
 
   const candidates = [
-    { id: "cand1", name: "Rohit K.", city: "Mumbai", profession: "Engineering Manager", source: "internal_network", attributes: { location_city_tier: "Mumbai", profession_seniority: "Senior professional" } },
-    { id: "cand2", name: "Vikram J.", city: "Jaipur", profession: "Product Lead", source: "matrimonial", attributes: { location_city_tier: "Tier 2 city" } },
+    { id: "cand1", name: "Rohit K.", city: "Mumbai", profession: "Engineering Manager", source: "internal_network", attributes: { location_city_tier: "Mumbai", profession_seniority: "Senior professional", smoking_habit: "Non-smoker" } },
+    { id: "cand2", name: "Vikram J.", city: "Jaipur", profession: "Product Lead", source: "matrimonial", attributes: { location_city_tier: "Tier 2 city", smoking_habit: "Occasional smoker" } },
     { id: "cand3", name: "Aditya R.", city: "Chennai", profession: "Data Scientist", source: "linkedin", attributes: { location_city_tier: "Other metro", education: "Top-tier college" } },
-    { id: "cand4", name: "Arjun T.", city: "Bangalore", profession: "Founder", source: "referral", attributes: { location_city_tier: "Bangalore metro", personality_temperament: "Calm" } },
-    { id: "cand5", name: "Aarav M.", city: "Pune", profession: "Product Manager", source: "internal_network", attributes: { location_city_tier: "Pune", personality_temperament: "Outgoing" } },
-    { id: "cand6", name: "Karan D.", city: "Bangalore", profession: "Consultant", source: "referral", attributes: { location_city_tier: "Bangalore metro" } },
-    { id: "cand7", name: "Nikhil S.", city: "Mumbai", profession: "Trader", source: "matrimonial", attributes: { diet_lifestyle: "Non-vegetarian" } },
-    { id: "cand8", name: "Dev P.", city: "Mumbai", profession: "Architect", source: "internal_network", attributes: { diet_lifestyle: "Vegetarian", education: "Top-tier college", values_intent: "Does not want children", profession_seniority: "Senior professional" } },
+    { id: "cand4", name: "Arjun T.", city: "Bangalore", profession: "Founder", source: "referral", attributes: { location_city_tier: "Bangalore metro", personality_temperament: "Calm", smoking_habit: "Non-smoker" } },
+    { id: "cand5", name: "Aarav M.", city: "Pune", profession: "Product Manager", source: "internal_network", attributes: { location_city_tier: "Pune", personality_temperament: "Outgoing", smoking_habit: "Non-smoker" } },
+    { id: "cand6", name: "Karan D.", city: "Bangalore", profession: "Consultant", source: "referral", attributes: { location_city_tier: "Bangalore metro", smoking_habit: "Non-smoker" } },
+    { id: "cand7", name: "Nikhil S.", city: "Mumbai", profession: "Trader", source: "matrimonial", attributes: { diet_lifestyle: "Non-vegetarian", smoking_habit: "Non-smoker" } },
+    { id: "cand8", name: "Dev P.", city: "Mumbai", profession: "Architect", source: "internal_network", attributes: { diet_lifestyle: "Vegetarian", education: "Top-tier college", values_intent: "Does not want children", profession_seniority: "Senior professional", smoking_habit: "Non-smoker" } },
     { id: "cand9", name: "Siddharth B.", city: "Delhi", profession: "Sales Director", source: "linkedin", attributes: {} },
-    { id: "cand10", name: "Sam K.", city: "Delhi", profession: "Product Designer", source: "internal_network", attributes: { values_intent: "Wants children" } },
+    { id: "cand10", name: "Sam K.", city: "Delhi", profession: "Product Designer", source: "internal_network", attributes: { values_intent: "Wants children", smoking_habit: "Non-smoker" } },
     { id: "cand11", name: "Manav G.", city: "Hyderabad", profession: "Finance Analyst", source: "matrimonial", attributes: { education: "Tier 2 college" } },
-    { id: "cand12", name: "Ishaan P.", city: "Bangalore", profession: "Lawyer", source: "internal_network", attributes: { marital_history: "Divorced" } },
-    { id: "cand13", name: "Varun J.", city: "Pune", profession: "Architect", source: "internal_network", attributes: { profession_seniority: "Mid-career" } },
-    { id: "cand14", name: "Ishita P.", city: "Delhi", profession: "Architect", source: "referral", attributes: { values_intent: "Does not want children" } },
+    { id: "cand12", name: "Ishaan P.", city: "Bangalore", profession: "Lawyer", source: "internal_network", attributes: { marital_history: "Divorced", smoking_habit: "Non-smoker" } },
+    { id: "cand13", name: "Varun J.", city: "Pune", profession: "Architect", source: "internal_network", attributes: { profession_seniority: "Mid-career", smoking_habit: "Non-smoker" } },
+    { id: "cand14", name: "Ishita P.", city: "Delhi", profession: "Architect", source: "referral", attributes: { values_intent: "Does not want children", smoking_habit: "Non-smoker" } },
   ];
 
   const clients = [
@@ -64,24 +75,28 @@ function buildSeed(now = Date.now()) {
     { id: "c4", name: "Neha K.", city: "Delhi", journey: "ongoing", arm: "intervention", matchmakerId: "m2" },
   ];
 
+  // The client's criteria. A criterion records a direction and a set of values,
+  // and separately how firm the client made it.
   const preferences = [
-    { id: "p1", clientId: "c1", dimension: "location_city_tier", value: "Bangalore metro", kind: "stated_preference", confirmed: false, status: "active", note: "Prefers to stay in the Bangalore metro", source: "onboarding", recordedAt: daysAgo(now, 70), recordedBy: "Aisha Verma" },
-    { id: "p2", clientId: "c2", dimension: "diet_lifestyle", value: "Non-vegetarian", kind: "confirmed_dealbreaker", confirmed: true, status: "active", note: "Non-vegetarian is a definite no", source: "onboarding", recordedAt: daysAgo(now, 30), confirmedAt: daysAgo(now, 30), recordedBy: "Aisha Verma" },
-    { id: "p3", clientId: "c2", dimension: "education", value: "Top-tier college", kind: "stated_preference", confirmed: false, status: "active", note: "Prefers a top-tier college", source: "onboarding", recordedAt: daysAgo(now, 30), recordedBy: "Aisha Verma" },
-    { id: "p4", clientId: "c4", dimension: "values_intent", value: "Wants children", kind: "stated_preference", confirmed: false, status: "active", note: "Wants to have children", source: "onboarding", recordedAt: daysAgo(now, 25), recordedBy: "Farhan Qureshi" },
+    { id: "p1", clientId: "c1", dimension: "location_city_tier", operator: "must_be", values: ["Bangalore metro"], kind: "stated_preference", confirmed: false, status: "active", note: "Prefers to stay in the Bangalore metro", source: "onboarding", recordedAt: daysAgo(now, 75), recordedBy: "Aisha Verma" },
+    { id: "p2", clientId: "c1", dimension: "smoking_habit", operator: "must_not_be", values: ["Occasional smoker", "Regular smoker"], kind: "confirmed_dealbreaker", confirmed: true, status: "active", note: "Will not consider anyone who smokes", source: "onboarding", recordedAt: daysAgo(now, 70), confirmedAt: daysAgo(now, 70), recordedBy: "Aisha Verma" },
+    { id: "p3", clientId: "c2", dimension: "diet_lifestyle", operator: "must_not_be", values: ["Non-vegetarian"], kind: "confirmed_dealbreaker", confirmed: true, status: "active", note: "Non-vegetarian is a definite no", source: "onboarding", recordedAt: daysAgo(now, 50), confirmedAt: daysAgo(now, 50), recordedBy: "Aisha Verma" },
+    { id: "p4", clientId: "c2", dimension: "education", operator: "must_be", values: ["Top-tier college"], kind: "stated_preference", confirmed: false, status: "active", note: "Prefers a top-tier college", source: "onboarding", recordedAt: daysAgo(now, 50), recordedBy: "Aisha Verma" },
+    { id: "p5", clientId: "c2", dimension: "smoking_habit", operator: "must_be", values: ["Non-smoker"], kind: "confirmed_preference", confirmed: true, status: "active", note: "Would prefer a non-smoker", source: "onboarding", recordedAt: daysAgo(now, 50), confirmedAt: daysAgo(now, 50), recordedBy: "Aisha Verma" },
+    { id: "p6", clientId: "c4", dimension: "values_intent", operator: "must_be", values: ["Wants children"], kind: "stated_preference", confirmed: false, status: "active", note: "Wants to have children", source: "onboarding", recordedAt: daysAgo(now, 45), recordedBy: "Farhan Qureshi" },
   ];
 
   const rejections = [
     { id: "r1", clientId: "c1", candidateId: "cand1", dimension: "location_city_tier", value: "Mumbai", severity: "preference", freeText: "Not based in Bangalore, says he won't relocate. She needs someone in the city.", recordedAt: daysAgo(now, 60), capturedBy: "Aisha Verma" },
-    { id: "r2", clientId: "c1", candidateId: "cand2", dimension: "location_city_tier", value: "Tier 2 city", severity: "likely_dealbreaker", freeText: "Lives in Jaipur, no plans to move. She said location is a hard no.", recordedAt: daysAgo(now, 40), capturedBy: "Aisha Verma" },
-    { id: "r3", clientId: "c1", candidateId: "cand3", dimension: "location_city_tier", value: "Other metro", severity: "preference", freeText: "Based in Chennai, relocation unclear.", recordedAt: daysAgo(now, 20), capturedBy: "Aisha Verma" },
+    { id: "r2", clientId: "c1", candidateId: "cand2", dimension: "location_city_tier", value: "Tier 2 city", severity: "likely_dealbreaker", freeText: "Lives in Jaipur, no plans to move. She said location is a hard no.", recordedAt: daysAgo(now, 45), capturedBy: "Aisha Verma" },
+    { id: "r3", clientId: "c1", candidateId: "cand3", dimension: "location_city_tier", value: "Other metro", severity: "preference", freeText: "Based in Chennai, relocation unclear.", recordedAt: daysAgo(now, 40), capturedBy: "Aisha Verma" },
     { id: "r4", clientId: "c1", candidateId: "cand11", dimension: "education", value: "Tier 2 college", severity: "preference", freeText: "Tier 2 college, she was expecting a top school.", recordedAt: daysAgo(now, 50), capturedBy: "Aisha Verma" },
-    { id: "r5", clientId: "c1", candidateId: "cand12", dimension: null, value: null, severity: "uncertain", freeText: "Something about his family history bothered her, need to unpack it.", recordedAt: daysAgo(now, 30), capturedBy: "Aisha Verma" },
-    { id: "r6", clientId: "c2", candidateId: "cand7", dimension: "diet_lifestyle", value: "Non-vegetarian", severity: "likely_dealbreaker", freeText: "He's non-vegetarian, that's a definite no for me.", recordedAt: daysAgo(now, 10), capturedBy: "Aisha Verma" },
+    { id: "r5", clientId: "c1", candidateId: "cand12", dimension: null, value: null, severity: "uncertain", freeText: "Something about his family history bothered her, need to unpack it.", recordedAt: daysAgo(now, 35), capturedBy: "Aisha Verma" },
+    { id: "r6", clientId: "c2", candidateId: "cand7", dimension: "diet_lifestyle", value: "Non-vegetarian", severity: "likely_dealbreaker", freeText: "He's non-vegetarian, that's a definite no for me.", recordedAt: daysAgo(now, 25), capturedBy: "Aisha Verma" },
   ];
 
   const acceptances = [
-    { id: "a1", clientId: "c1", candidateId: "cand4", dimension: "location_city_tier", value: "Bangalore metro", acceptedAt: daysAgo(now, 10) },
+    { id: "a1", clientId: "c1", candidateId: "cand4", dimension: "location_city_tier", value: "Bangalore metro", acceptedAt: daysAgo(now, 30) },
   ];
 
   // Acceptance insights captured by the matchmaker at the moment of a positive
@@ -94,21 +109,21 @@ function buildSeed(now = Date.now()) {
       candidateId: "cand4",
       dimensions: ["personality_temperament"],
       surprise: "Warmer and calmer in person than his profile suggested. Location mattered less than she expected.",
-      recordedAt: daysAgo(now, 9),
+      recordedAt: daysAgo(now, 29),
       recordedBy: "Aisha Verma",
     },
   ];
 
-  // Historical shares that precede the rejections above. Each share must be
-  // older than its rejection so the time ordering rules can be exercised.
+  // Historical shares, all before the pilot window opened. They are the
+  // baseline the audit measures against.
   const shares = [
     { id: "s1", clientId: "c1", candidateId: "cand1", sharedAt: daysAgo(now, 62), actor: "Aisha Verma", consultedInsightIds: [] },
-    { id: "s2", clientId: "c1", candidateId: "cand2", sharedAt: daysAgo(now, 42), actor: "Aisha Verma", consultedInsightIds: [] },
-    { id: "s3", clientId: "c1", candidateId: "cand3", sharedAt: daysAgo(now, 22), actor: "Aisha Verma", consultedInsightIds: [] },
-    { id: "s4", clientId: "c1", candidateId: "cand4", sharedAt: daysAgo(now, 12), actor: "Aisha Verma", consultedInsightIds: [] },
-    { id: "s5", clientId: "c2", candidateId: "cand7", sharedAt: daysAgo(now, 12), actor: "Aisha Verma", consultedInsightIds: [] },
-    { id: "s6", clientId: "c1", candidateId: "cand11", sharedAt: daysAgo(now, 52), actor: "Aisha Verma", consultedInsightIds: [] },
-    { id: "s7", clientId: "c1", candidateId: "cand12", sharedAt: daysAgo(now, 32), actor: "Aisha Verma", consultedInsightIds: [] },
+    { id: "s2", clientId: "c1", candidateId: "cand2", sharedAt: daysAgo(now, 47), actor: "Aisha Verma", consultedInsightIds: [] },
+    { id: "s3", clientId: "c1", candidateId: "cand3", sharedAt: daysAgo(now, 42), actor: "Aisha Verma", consultedInsightIds: [] },
+    { id: "s4", clientId: "c1", candidateId: "cand4", sharedAt: daysAgo(now, 37), actor: "Aisha Verma", consultedInsightIds: [] },
+    { id: "s5", clientId: "c2", candidateId: "cand7", sharedAt: daysAgo(now, 27), actor: "Aisha Verma", consultedInsightIds: [] },
+    { id: "s6", clientId: "c1", candidateId: "cand11", sharedAt: daysAgo(now, 57), actor: "Aisha Verma", consultedInsightIds: [] },
+    { id: "s7", clientId: "c1", candidateId: "cand12", sharedAt: daysAgo(now, 33), actor: "Aisha Verma", consultedInsightIds: [] },
   ];
 
   const queues = {
@@ -119,7 +134,13 @@ function buildSeed(now = Date.now()) {
   };
 
   return {
-    meta: { synthetic: true, seedAt: new Date(now).toISOString(), matchmakerId: "m1" },
+    meta: {
+      synthetic: true,
+      seedAt: new Date(now).toISOString(),
+      matchmakerId: "m1",
+      // The measurement window opens here. Everything before it is baseline.
+      pilotStart: daysAgo(now, 18),
+    },
     matchmakers,
     clients,
     candidates,
@@ -131,32 +152,33 @@ function buildSeed(now = Date.now()) {
     confirmations: [],
     resolutions: [],
     shares,
+    cardViews: [],
+    audits: [],
     audit: [],
     queues,
   };
 }
 
 // The send-time check, reduced to what a metric or an audit line needs.
-// The server recomputes this at share time so the recorded number is never
-// something the interface claimed.
 function summariseCheck(review) {
   const findings = (review && review.findings ? review.findings : []).map((f) => ({
     type: f.type,
     basis: f.basis || "history",
     dimension: f.dimension,
     value: f.value === undefined ? null : f.value,
+    requirement: f.requirement || null,
   }));
-  const dealbreaker = findings.filter((f) => f.basis === "confirmed_dealbreaker");
-  const confirmedMismatch = findings.filter((f) => f.basis === "confirmed_preference");
-  const statedMismatch = findings.filter((f) => f.basis === "stated_preference");
+  const hard = findings.filter((f) => f.basis === "confirmed_dealbreaker");
+  const confirmed = findings.filter((f) => f.basis === "confirmed_preference");
+  const stated = findings.filter((f) => f.basis === "stated_preference");
   return {
     state: review ? review.state : null,
     findings,
     flagged: findings.length > 0,
-    confirmedConflicts: dealbreaker.length + confirmedMismatch.length,
-    dealbreakerConflicts: dealbreaker.length,
-    confirmedPreferenceMismatches: confirmedMismatch.length,
-    statedPreferenceMismatches: statedMismatch.length,
+    confirmedConflicts: hard.length + confirmed.length,
+    dealbreakerConflicts: hard.length,
+    confirmedPreferenceMismatches: confirmed.length,
+    statedPreferenceMismatches: stated.length,
   };
 }
 
@@ -164,6 +186,11 @@ function createStore(initial) {
   const state = JSON.parse(JSON.stringify(initial));
   if (!state.matchmakers) state.matchmakers = [];
   if (!state.preferenceEvents) state.preferenceEvents = [];
+  if (!state.cardViews) state.cardViews = [];
+  if (!state.audits) state.audits = [];
+  if (!state.meta) state.meta = {};
+  if (!state.meta.pilotStart) state.meta.pilotStart = new Date().toISOString();
+  for (const c of state.preferences || []) normaliseCriterion(c);
 
   // Every id in the workspace, so a generated id can never land on a seeded
   // one. The seed uses short ids like "cand2" and "m2", which a naive counter
@@ -181,6 +208,8 @@ function createStore(initial) {
     "resolutions",
     "shares",
     "preferenceEvents",
+    "cardViews",
+    "audits",
     "audit",
   ]) {
     for (const rec of state[key] || []) {
@@ -215,9 +244,6 @@ function createStore(initial) {
     return v === undefined || v === null ? null : v;
   }
 
-  // The send-time check, reduced to what a metric or an audit line needs.
-  // The server recomputes this at share time so the recorded number is never
-  // something the interface claimed.
   const store = {
     state,
 
@@ -236,8 +262,12 @@ function createStore(initial) {
     preferences(clientId) {
       return state.preferences.filter((p) => p.clientId === clientId);
     },
-    activePreferences(clientId) {
-      return store.preferences(clientId).filter((p) => p.status === "active");
+    // The criteria in force right now.
+    activeCriteria(clientId) {
+      return Array.from(criteriaAt(store, clientId, new Date()).values());
+    },
+    criterionHistory(clientId) {
+      return store.preferences(clientId).slice().sort((a, b) => new Date(a.recordedAt) - new Date(b.recordedAt));
     },
     preferenceEvents(clientId) {
       return state.preferenceEvents.filter((e) => e.clientId === clientId);
@@ -256,6 +286,15 @@ function createStore(initial) {
     },
     shares(clientId) {
       return state.shares.filter((s) => s.clientId === clientId);
+    },
+    cardViews(clientId) {
+      return state.cardViews.filter((v) => v.clientId === clientId);
+    },
+    audits() {
+      return state.audits;
+    },
+    auditsFor(clientId) {
+      return state.audits.filter((a) => a.clientId === clientId);
     },
     queue(clientId) {
       return (state.queues[clientId] || []).map((cid) => store.candidate(cid)).filter(Boolean);
@@ -301,8 +340,10 @@ function createStore(initial) {
         name: cleanName,
         city: cleanCity,
         journey: journey === "new" ? "new" : "ongoing",
-        // A new client starts on the control arm so the pilot can allocate them.
-        arm: "control",
+        // The check is on by default. The arms are a pilot allocation, not a
+        // product behaviour, and a matchmaker who adds a client and then finds
+        // the check never fires would conclude the tool does nothing.
+        arm: "intervention",
         matchmakerId: mm.id,
         createdAt: nowIso(),
       };
@@ -346,80 +387,123 @@ function createStore(initial) {
       return rec;
     },
 
-    // Record what the client said about a dimension. An ordinary preference is
-    // advisory. A dealbreaker is an explicit no, so it governs the dimension.
-    // Every write is logged with what it replaced, so a change is traceable.
-    setPreference({ clientId, dimension, value, kind, note, actor, source }) {
+    // Record what the client said about a dimension. A criterion has a
+    // direction, a set of values, and a level of firmness, and those are
+    // recorded separately. Every write is versioned: the old criterion stays
+    // readable with the date it was in force, so a share can be audited
+    // against the file as it was rather than as it is now.
+    setPreference({ clientId, dimension, operator, values, value, kind, note, actor, source }) {
       const clientRec = store.client(clientId);
       if (!clientRec) throw new InputError("Unknown client.", "clientId");
       if (!DIMENSION_BY_KEY[dimension]) {
         throw new InputError("Pick a dimension.", "dimension");
       }
-      const cleanValue = text(value, "Value", "value");
-      if (dimensionValues(dimension).indexOf(cleanValue) === -1) {
-        throw new InputError(
-          `"${cleanValue}" is not a recorded value for ${DIMENSION_BY_KEY[dimension].label}.`,
-          "value"
-        );
+      const kinds = ["confirmed_dealbreaker", "confirmed_preference", "stated_preference"];
+      const chosen = kinds.indexOf(kind) === -1 ? "stated_preference" : kind;
+      // With no operator given, a dealbreaker forbids the value and a
+      // preference requires it. This is the same reading the migration applies
+      // to older records, so the two can never disagree.
+      const op =
+        operator === "must_not_be" || operator === "must_be"
+          ? operator
+          : chosen === "confirmed_dealbreaker"
+            ? "must_not_be"
+            : "must_be";
+      const raw = Array.isArray(values) ? values : values || value ? [values || value] : [];
+      const list = raw.map((v) => text(v, "Value", "values")).filter(Boolean);
+      if (!list.length) throw new InputError("Pick at least one value.", "values");
+      const allowed = dimensionValues(dimension);
+      for (const v of list) {
+        if (allowed.indexOf(v) === -1) {
+          throw new InputError(
+            `"${v}" is not a recorded value for ${DIMENSION_BY_KEY[dimension].label}.`,
+            "values"
+          );
+        }
       }
-      const isDealbreaker = kind === "confirmed_dealbreaker";
       const now = nowIso();
-      const existing = state.preferences.find(
-        (p) => p.clientId === clientId && p.dimension === dimension && p.status === "active"
-      );
+
+      const existing = store.activeCriteria(clientId).find((c) => c.dimension === dimension);
       const before = existing
-        ? { kind: existing.kind, value: existing.value, note: existing.note || "" }
+        ? {
+            operator: existing.operator,
+            values: existing.values,
+            kind: existing.kind,
+            note: existing.note || "",
+          }
         : null;
-      const rec = existing || {
+      if (existing) {
+        existing.status = "superseded";
+        existing.supersededAt = now;
+      }
+
+      const rec = {
         id: id("pref"),
         clientId,
         dimension,
-        createdAt: now,
+        operator: op,
+        values: list,
+        kind: chosen,
+        confirmed: chosen !== "stated_preference",
+        status: "active",
+        note: typeof note === "string" ? note.trim() : "",
+        source: source || "onboarding",
+        recordedAt: now,
+        recordedBy: actor || null,
+        supersedes: existing ? existing.id : null,
       };
-      rec.value = cleanValue;
-      rec.kind = isDealbreaker ? "confirmed_dealbreaker" : "stated_preference";
-      rec.confirmed = isDealbreaker;
-      rec.status = "active";
-      rec.note = typeof note === "string" ? note.trim() : "";
-      rec.source = source || "onboarding";
-      rec.recordedAt = now;
-      rec.recordedBy = actor || null;
-      if (isDealbreaker) rec.confirmedAt = now;
-      if (!existing) state.preferences.push(rec);
+      if (chosen !== "stated_preference") rec.confirmedAt = now;
+      state.preferences.push(rec);
 
       state.preferenceEvents.push({
         id: id("pev"),
         clientId,
         dimension,
         before,
-        after: { kind: rec.kind, value: rec.value, note: rec.note },
+        after: { operator: op, values: list, kind: chosen, note: rec.note },
         at: now,
         by: actor || null,
         source: rec.source,
       });
-      log("preference_recorded", { clientId, dimension, value: cleanValue, kind: rec.kind, actor });
+      log("preference_recorded", { clientId, dimension, operator: op, values: list, kind: chosen, actor });
       return rec;
     },
 
-    // Withdraw a criterion. The record is kept with a removed status so the
-    // history of what was believed stays readable.
+    // Withdraw a criterion. The record is kept with a removed date so the
+    // history of what was believed stays readable and the audit can tell what
+    // was in force when.
     removePreference({ clientId, preferenceId, actor }) {
       const pref = state.preferences.find((p) => p.id === preferenceId && p.clientId === clientId);
-      if (!pref) throw new InputError("Unknown preference.", "preferenceId");
+      if (!pref) throw new InputError("Unknown criterion.", "preferenceId");
+      const now = nowIso();
       pref.status = "removed";
-      pref.removedAt = nowIso();
+      pref.removedAt = now;
       state.preferenceEvents.push({
         id: id("pev"),
         clientId,
         dimension: pref.dimension,
-        before: { kind: pref.kind, value: pref.value, note: pref.note || "" },
+        before: { operator: pref.operator, values: pref.values, kind: pref.kind, note: pref.note || "" },
         after: null,
-        at: pref.removedAt,
+        at: now,
         by: actor || null,
         source: "removed",
       });
       log("preference_removed", { clientId, dimension: pref.dimension, actor });
       return pref;
+    },
+
+    // Move a client between the pilot arms. This is an allocation decision,
+    // and it is recorded so the measurement can be read by arm afterwards.
+    setArm({ clientId, arm, actor }) {
+      const clientRec = store.client(clientId);
+      if (!clientRec) throw new InputError("Unknown client.", "clientId");
+      if (arm !== "control" && arm !== "intervention") {
+        throw new InputError("Pick an arm.", "arm");
+      }
+      const before = clientRec.arm;
+      clientRec.arm = arm;
+      log("client_arm_changed", { clientId, before, arm, actor });
+      return clientRec;
     },
 
     addToQueue({ clientId, candidateId }) {
@@ -436,6 +520,22 @@ function createStore(initial) {
     },
 
     // ---- events ----
+
+    // The matchmaker opened the card for this candidate. This is the evidence
+    // for whether the check was consulted, which the adoption guardrail needs.
+    recordCardView({ clientId, candidateId, actor, surfaced }) {
+      const rec = {
+        id: id("cv"),
+        clientId,
+        candidateId,
+        at: nowIso(),
+        actor,
+        surfaced: !!surfaced,
+      };
+      state.cardViews.push(rec);
+      log("card_viewed", { clientId, candidateId, actor, surfaced: rec.surfaced });
+      return rec;
+    },
 
     share({ clientId, candidateId, actor, consultedInsightIds }) {
       // Only insights that exist and belong to this client may be cited.
@@ -459,19 +559,105 @@ function createStore(initial) {
       };
       state.shares.push(rec);
       store.removeFromQueue(clientId, candidateId);
+      // Every share is audited, whether or not the check was shown and
+      // whichever arm the client is on. The audit does not depend on the
+      // matchmaker having used the product.
+      store.auditShare({ shareId: rec.id, by: actor });
       log("share", { clientId, candidateId, actor, consultedInsightIds: consulted, check: rec.check });
+      return rec;
+    },
+
+    // Re-evaluate a share against the criteria that were in force at the
+    // moment it was shared. This is the audit: the same deterministic rules,
+    // the same classification, applied to every share whether or not the
+    // check was surfaced, and to the file as it was at the time.
+    auditShare({ shareId, by }) {
+      const share = state.shares.find((s) => s.id === shareId);
+      if (!share) throw new InputError("Unknown share.", "shareId");
+      const cand = store.candidate(share.candidateId);
+      if (!cand) throw new InputError("Unknown candidate.", "candidateId");
+      const review = evaluateSend(store, share.clientId, cand, share.sharedAt);
+
+      const criterionFindings = review.findings.filter(
+        (f) => f.basis === "confirmed_dealbreaker" || f.basis === "confirmed_preference" || f.basis === "stated_preference"
+      );
+      const hard = criterionFindings.filter((f) => f.basis === "confirmed_dealbreaker");
+      const soft = criterionFindings.filter((f) => f.basis !== "confirmed_dealbreaker");
+      const unknown = review.findings.filter((f) => f.basis === "unknown");
+      const history = review.findings.filter((f) => f.basis === "history");
+
+      const classification = hard.length
+        ? "hard_conflict"
+        : soft.length
+          ? "soft_mismatch"
+          : unknown.length
+            ? "unknown"
+            : "clean";
+
+      const rec = {
+        id: id("aud"),
+        shareId: share.id,
+        clientId: share.clientId,
+        candidateId: share.candidateId,
+        at: nowIso(),
+        by: by || null,
+        classification,
+        hard: hard.length,
+        soft: soft.length,
+        unknown: unknown.length,
+        history: history.length,
+        details: criterionFindings.map((f) => ({
+          type: f.type,
+          basis: f.basis,
+          dimension: f.dimension,
+          value: f.value === undefined ? null : f.value,
+          requirement: f.requirement || null,
+        })),
+        // A reviewer can confirm or dispute the audit. The rate is reported
+        // both ways, because an automated audit can inherit the rule engine's
+        // mistakes and needs a human to catch them.
+        humanConfirmed: null,
+        note: "",
+      };
+      const existing = state.audits.findIndex((a) => a.shareId === share.id);
+      if (existing === -1) state.audits.push(rec);
+      else state.audits[existing] = rec;
+      return rec;
+    },
+
+    // Audit every share that has not been audited yet.
+    runAudit({ by }) {
+      let done = 0;
+      for (const share of state.shares) {
+        if (state.audits.some((a) => a.shareId === share.id)) continue;
+        store.auditShare({ shareId: share.id, by });
+        done += 1;
+      }
+      log("audit_run", { sharesAudited: done, by });
+      return { audited: done };
+    },
+
+    // A human reviewer marks an audit as right or wrong.
+    confirmAudit({ auditId, humanConfirmed, note, by }) {
+      const rec = state.audits.find((a) => a.id === auditId);
+      if (!rec) throw new InputError("Unknown audit.", "auditId");
+      rec.humanConfirmed = !!humanConfirmed;
+      rec.note = typeof note === "string" ? note.trim() : rec.note;
+      rec.confirmedAt = nowIso();
+      rec.confirmedBy = by || null;
+      log("audit_reviewed", { auditId, humanConfirmed: rec.humanConfirmed, by });
       return rec;
     },
 
     reject({ clientId, candidateId, dimension, severity, freeText, actor, latencyMs }) {
       const now = nowIso();
       // A rejection implies a share preceded it. If none is recorded, create one so
-      // Metric A and ARCR have the share-time ordering they need.
+      // the metric and ARCR have the share-time ordering they need.
       const hasShare = state.shares.some((s) => s.clientId === clientId && s.candidateId === candidateId);
       if (!hasShare) {
         const cand = store.candidate(candidateId);
         const review = cand ? evaluateSend(store, clientId, cand) : null;
-        state.shares.push({
+        const share = {
           id: id("shr"),
           clientId,
           candidateId,
@@ -479,7 +665,9 @@ function createStore(initial) {
           actor,
           consultedInsightIds: [],
           check: summariseCheck(review),
-        });
+        };
+        state.shares.push(share);
+        store.auditShare({ shareId: share.id, by: actor });
       }
       const rec = {
         id: id("rej"),
@@ -541,7 +729,7 @@ function createStore(initial) {
         check: summariseCheck(review),
       };
       state.resolutions.push(rec);
-      log("card_resolved", { clientId, candidateId, action, actor });
+      log("card_resolved", { clientId, candidateId, action, actor, rationale: rec.rationale });
       return rec;
     },
 
@@ -559,48 +747,45 @@ function createStore(initial) {
         recordedBy: actor,
       };
       state.confirmations.push(rec);
-      // A client answer promotes a dimension to a confirmed preference or
-      // dealbreaker. Only this path writes a client preference, and only when
-      // there is a value to write, the client's own words, and a client answer.
+      // A client answer promotes a dimension to a confirmed criterion. Only this
+      // path writes one, and only with a value to write and the client's own
+      // words. The direction follows what the client settled: a dealbreaker
+      // forbids the value they rejected, a preference requires the value they
+      // accepted.
       if ((answer === "dealbreaker" || answer === "preference") && value && verbatim && verbatim.trim()) {
-        const kind = answer === "dealbreaker" ? "confirmed_dealbreaker" : "stated_preference";
-        const existing = state.preferences.find(
-          (p) => p.clientId === clientId && p.dimension === dimension && p.status === "active"
-        );
+        const kind = answer === "dealbreaker" ? "confirmed_dealbreaker" : "confirmed_preference";
+        const operator = answer === "dealbreaker" ? "must_not_be" : "must_be";
+        const existing = store.activeCriteria(clientId).find((c) => c.dimension === dimension);
         const before = existing
-          ? { kind: existing.kind, value: existing.value, note: existing.note || "" }
+          ? { operator: existing.operator, values: existing.values, kind: existing.kind, note: existing.note || "" }
           : null;
         if (existing) {
-          existing.kind = kind;
-          existing.value = value;
-          existing.confirmed = true;
-          existing.status = "active";
-          existing.confirmedAt = now;
-          existing.recordedAt = now;
-          existing.source = "client_answer";
-          existing.recordedBy = actor || null;
-        } else {
-          state.preferences.push({
-            id: id("pref"),
-            clientId,
-            dimension,
-            value,
-            kind,
-            confirmed: true,
-            status: "active",
-            note: "",
-            source: "client_answer",
-            recordedAt: now,
-            confirmedAt: now,
-            recordedBy: actor || null,
-          });
+          existing.status = "superseded";
+          existing.supersededAt = now;
         }
+        const pref = {
+          id: id("pref"),
+          clientId,
+          dimension,
+          operator,
+          values: [value],
+          kind,
+          confirmed: true,
+          status: "active",
+          note: "",
+          source: "client_answer",
+          recordedAt: now,
+          confirmedAt: now,
+          recordedBy: actor || null,
+          supersedes: existing ? existing.id : null,
+        };
+        state.preferences.push(pref);
         state.preferenceEvents.push({
           id: id("pev"),
           clientId,
           dimension,
           before,
-          after: { kind, value, note: "" },
+          after: { operator, values: [value], kind, note: "" },
           at: now,
           by: actor || null,
           source: "client_answer",
@@ -614,6 +799,11 @@ function createStore(initial) {
       return JSON.parse(JSON.stringify(state));
     },
   };
+
+  // Every share in the workspace is audited, including the history that came
+  // before the check existed. The baseline has to be judged by the same
+  // process as the measurement window, or the two are not comparable.
+  store.runAudit({ by: null });
 
   return store;
 }
@@ -632,4 +822,4 @@ function save(store, path) {
   fs.writeFileSync(path, JSON.stringify(store.toJSON(), null, 2));
 }
 
-module.exports = { buildSeed, createStore, load, save, DAY, daysAgo, InputError, summariseCheck };
+module.exports = { buildSeed, createStore, load, save, DAY, daysAgo, InputError, summariseCheck, normaliseCriterion };

@@ -154,7 +154,7 @@ test("positive evidence labels stated preferences and observed acceptances separ
   const cand = store.candidate("cand6");
   const result = evaluateSend(store, "c1", cand);
   const loc = result.positive.filter((p) => p.dimension === "location_city_tier");
-  assert.ok(loc.some((p) => p.source === "stated_preference"));
+  assert.ok(loc.some((p) => p.source === "criterion"));
   assert.ok(loc.some((p) => p.source === "observed_acceptance"));
 });
 
@@ -162,6 +162,6 @@ test("a candidate that does not match a stated preference is not positive eviden
   const store = fresh();
   // Aarav is in Pune. Priya stated Bangalore metro, so this is not support.
   const result = evaluateSend(store, "c1", store.candidate("cand5"));
-  assert.ok(!result.positive.some((p) => p.source === "stated_preference"));
+  assert.ok(!result.positive.some((p) => p.source === "criterion"));
   assert.ok(result.findings.some((f) => f.type === "preference_mismatch"));
 });

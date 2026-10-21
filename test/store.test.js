@@ -46,10 +46,13 @@ test("recordClientAnswer with preference confirms a stated preference", () => {
     verbatim: "Location is a preference, not a dealbreaker",
     actor: "aisha",
   });
-  const p = store.preferences("c1").find((x) => x.dimension === "location_city_tier");
+  const p = store
+    .activeCriteria("c1")
+    .find((x) => x.dimension === "location_city_tier");
   assert.equal(p.confirmed, true);
-  assert.equal(p.kind, "stated_preference");
-  assert.equal(p.value, "Bangalore metro");
+  assert.equal(p.kind, "confirmed_preference");
+  assert.equal(p.operator, "must_be");
+  assert.deepEqual(p.values, ["Bangalore metro"]);
 });
 
 test("recordClientAnswer with dealbreaker writes a confirmed_dealbreaker", () => {
@@ -62,10 +65,13 @@ test("recordClientAnswer with dealbreaker writes a confirmed_dealbreaker", () =>
     verbatim: "Marital history is a dealbreaker for me",
     actor: "aisha",
   });
-  const p = store.preferences("c3").find((x) => x.dimension === "marital_history");
+  const p = store
+    .activeCriteria("c3")
+    .find((x) => x.dimension === "marital_history");
   assert.equal(p.kind, "confirmed_dealbreaker");
+  assert.equal(p.operator, "must_not_be");
+  assert.deepEqual(p.values, ["Divorced"]);
   assert.equal(p.confirmed, true);
-  assert.equal(p.value, "Divorced");
 });
 
 test("recordClientAnswer without the client's words writes no rule", () => {

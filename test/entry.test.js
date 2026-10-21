@@ -47,7 +47,7 @@ test("a client can be created and is owned by a real matchmaker", () => {
   });
   assert.equal(store.client(rec.id).name, "Ananya Rao");
   assert.equal(store.client(rec.id).matchmakerId, "m1");
-  assert.equal(store.client(rec.id).arm, "control", "a new client starts on the control arm");
+  assert.equal(store.client(rec.id).arm, "intervention", "a new client gets the check by default");
   assert.deepEqual(store.queue(rec.id), []);
 });
 
@@ -103,13 +103,15 @@ test("a preference can be recorded and is then used by the check", () => {
   const rec = store.setPreference({
     clientId: "c3",
     dimension: "diet_lifestyle",
-    value: "Vegetarian",
+    operator: "must_not_be",
+    values: ["Vegetarian"],
     kind: "confirmed_dealbreaker",
     note: "Vegetarian only",
     actor: "Aisha Verma",
   });
   assert.equal(rec.kind, "confirmed_dealbreaker");
   assert.equal(rec.confirmed, true);
+  assert.equal(rec.operator, "must_not_be");
   // A candidate who is vegetarian now conflicts for this client.
   const result = evaluateSend(store, "c3", {
     id: "v",
@@ -124,7 +126,8 @@ test("an ordinary preference is advisory, not a rule", () => {
   const rec = store.setPreference({
     clientId: "c3",
     dimension: "location_city_tier",
-    value: "Bangalore metro",
+    operator: "must_be",
+    values: ["Bangalore metro"],
     kind: "stated_preference",
     actor: "Aisha Verma",
   });
@@ -143,33 +146,45 @@ test("changing a criterion is recorded with what it replaced", () => {
   store.setPreference({
     clientId: "c1",
     dimension: "location_city_tier",
-    value: "Mumbai",
+    operator: "must_be",
+    values: ["Mumbai"],
     kind: "stated_preference",
     actor: "Aisha Verma",
   });
   store.setPreference({
     clientId: "c1",
     dimension: "location_city_tier",
-    value: "Bangalore metro",
+    operator: "must_be",
+    values: ["Bangalore metro"],
     kind: "stated_preference",
     actor: "Aisha Verma",
   });
   const events = store.preferenceEvents("c1");
+  // Two writes, two events. The first one supersedes the criterion already on
+  // file, so the change from the original is on the record too.
   assert.equal(events.length, 2);
-  assert.equal(events[1].before.value, "Mumbai");
-  assert.equal(events[1].after.value, "Bangalore metro");
-  // Only the newest criterion is active.
-  const active = store.activePreferences("c1").filter((p) => p.dimension === "location_city_tier");
+  assert.deepEqual(events[0].before.values, ["Bangalore metro"]);
+  assert.deepEqual(events[0].after.values, ["Mumbai"]);
+  assert.deepEqual(events[1].before.values, ["Mumbai"]);
+  assert.deepEqual(events[1].after.values, ["Bangalore metro"]);
+  // Only the newest criterion is in force. The old one is kept with the date
+  // it was in force, so a past share can be audited against the file as it was.
+  const active = store.activeCriteria("c1").filter((p) => p.dimension === "location_city_tier");
   assert.equal(active.length, 1);
-  assert.equal(active[0].value, "Bangalore metro");
+  assert.deepEqual(active[0].values, ["Bangalore metro"]);
+  const history = store.criterionHistory("c1").filter((p) => p.dimension === "location_city_tier");
+  assert.equal(history.length, 3);
+  assert.equal(history[0].status, "superseded");
+  assert.equal(history[2].status, "active");
 });
 
 test("withdrawing a criterion keeps the history and stops it applying", () => {
   const store = fresh();
-  const pref = store.preferences("c1").find((p) => p.dimension === "location_city_tier");
+  const pref = store.activeCriteria("c1").find((p) => p.dimension === "location_city_tier");
   store.removePreference({ clientId: "c1", preferenceId: pref.id, actor: "Aisha Verma" });
   assert.equal(pref.status, "removed");
-  assert.equal(store.activePreferences("c1").filter((p) => p.dimension === "location_city_tier").length, 0);
+  assert.ok(pref.removedAt);
+  assert.equal(store.activeCriteria("c1").filter((p) => p.dimension === "location_city_tier").length, 0);
   const events = store.preferenceEvents("c1");
   assert.equal(events[events.length - 1].after, null);
 });

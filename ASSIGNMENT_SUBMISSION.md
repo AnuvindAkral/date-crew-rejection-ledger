@@ -1,6 +1,8 @@
 # The Date Crew: Product Growth Assessment
 
-Canonical submission response. The detailed research, decisions, tests and supporting documents live in `phase1/` and `docs/`; this file is the answer.
+The primary submission response. Supporting research, decisions, tests and documentation live in `docs/` and `phase1/`.
+
+A note on structure: the original assessment brief is not saved in this repository, so its exact section titles and word limits could not be re-verified. The three sections below follow the limits I was given: roughly 300 words for the diagnosis, 500 for the solution, and 200 for the curveball response.
 
 ## Diagnosis
 
@@ -40,9 +42,15 @@ The two pieces add two things. The ledger makes rejection history retrievable at
 
 The claim is small: it reduces the cost of remembering and makes forgetting visible. If that is not worth building, the answer is more matchmakers, a real option, just more expensive.
 
+## Implemented versus proposed
+
+**Implemented:** the rejection ledger, the deterministic dealbreaker and contradiction checks, client clarification with recorded answers, the acceptance debrief, the learning-loop metric, and the operator-only measurement view. All run in a working prototype with synthetic data.
+
+**Proposed, not built:** anything client-facing, any ranking or compatibility score, and the sourcing-channel scorecard. The scorecard is gated on data the prototype does not have, and the client-facing idea was rejected by the red-team review.
+
 ## What is included and what is not
 
-- **Working prototype:** yes. Run `node src/server.js`, open http://localhost:4321. Demo script in `DEMO_SCRIPT.md`.
+- **Working prototype:** yes. Run `node src/server.js`, open http://localhost:4321. Demo script in `docs/DEMO_SCRIPT.md`.
 - **Tests:** `node --test`, 40 pass.
 - **Screenshots:** three captured in `screenshots/`, not visually inspected by me; a human should glance before sharing.
 - **Code repository:** local git only, no remote yet.

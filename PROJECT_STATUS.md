@@ -22,7 +22,7 @@ Phase 2 of The Date Crew product growth assessment. Phase 1 research and diagnos
 | `src/` | Prototype source, zero dependency | Built |
 | `test/` | Rules, store, metrics, bootstrap and insights tests | 39 passing |
 | `screenshots/` | Clients, client detail, contradiction card | Captured |
-| `README.md`, `DEMO_SCRIPT.md`, `PILOT_PLAN.md`, `ASSESSMENT_NARRATIVE.md` | Run, demo, pilot and canonical submission response | Complete |
+| `README.md`, `PILOT_PLAN.md`, `ASSIGNMENT_SUBMISSION.md`, `docs/DEMO_SCRIPT.md` | Run, pilot, submission and demo documentation | Complete |
 | `PROJECT_STATUS.md` | This file | Current |
 
 Local git repository, no remote. gitleaks pre-commit hook active.
@@ -111,4 +111,4 @@ The five-conversation matchmaker interview protocol is prepared in `docs/INTERVI
 
 ## 10. Next
 
-Gate F. The assignment narrative is written in `ASSESSMENT_NARRATIVE.md` and keeps three claims separate: the red-team review as a scope-changing decision, the interview protocol as a validation plan, and the prototype as proof that the mechanism works technically. Nothing is deployed, published or emailed until the user approves external sharing.
+Gate F. The submission response is written in `ASSIGNMENT_SUBMISSION.md` and keeps three claims separate: the red-team review as a scope-changing decision, the interview protocol as a validation plan, and the prototype as proof that the mechanism works technically. Nothing is deployed, published or emailed until the user approves external sharing.

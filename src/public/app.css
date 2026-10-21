@@ -172,14 +172,18 @@ h3 { font-size: 14px; margin: 0 0 6px; }
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: 40px 16px;
+  padding: 24px 16px;
   z-index: 20;
+  overflow-y: auto;
 }
 .modal {
   background: var(--card);
   border-radius: 12px;
   max-width: 560px;
   width: 100%;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 20px;
   box-shadow: 0 12px 40px rgba(0,0,0,0.18);
 }
@@ -222,7 +226,18 @@ h3 { font-size: 14px; margin: 0 0 6px; }
 .compare .side.rejected { background: #fbf3f0; }
 .compare .side.accepted { background: #f1f6f2; }
 .compare .side .side-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); }
-.modal-actions { display: flex; gap: 10px; margin-top: 16px; justify-content: flex-end; flex-wrap: wrap; }
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  position: sticky;
+  bottom: -20px;
+  margin: 16px -20px -20px;
+  padding: 14px 20px 20px;
+  background: var(--card);
+  border-top: 1px solid var(--line);
+}
 
 /* Reject capture */
 .field { margin-bottom: 14px; }

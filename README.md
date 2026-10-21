@@ -10,22 +10,19 @@ A matchmaker's work is built on conversations. A client says no to a profile and
 
 The founder of The Date Crew has made this point herself: she learns little from what a client says at the start, and far more from what they reject. This tool makes that insight usable.
 
-It does two things.
+The main thing it does happens before an email goes out. When a matchmaker is about to share a profile, the tool loads that client's recorded preferences and confirmed dealbreakers, compares them against the candidate's known attributes, and returns one of four states: a conflict against a confirmed dealbreaker, a softer preference mismatch, a contradiction where the client rejected this dimension before and later accepted it, or incomplete because there is nothing to compare against. The matchmaker proceeds, holds, or resolves. Nothing is blocked automatically and no preference changes without a recorded client answer.
 
-The Rejection Ledger turns a rejection into a structured record, a dimension, a severity, and the reason in the matchmaker's own words. It keeps a per-client history and, right before the matchmaker sends the next profile, surfaces a conflict or a contradiction. A confirmed dealbreaker is a hard check. A past rejection is evidence, never a standing rule.
+The second thing it does is make the rejection itself reusable. A rejection becomes a structured record, a dimension, a severity, and the reason in the matchmaker's own words, so the next send has history to work from.
 
-The acceptance debrief adds the other half. When a client accepts someone, the matchmaker records what mattered and what surprised them. That insight shows up at the next send with a checkbox, and the matchmaker marks whether it informed the recommendation. Rejections tell you what to avoid. Acceptances tell you what actually works, and that signal was usually being thrown away.
-
-Neither piece decides anything. They surface what is already known, at the point it is useful, and leave the judgement where it belongs.
+Neither decides anything. Both surface what is already known, at the point it is useful, and leave the judgement where it belongs.
 
 ## What is implemented
 
+- **The pre-send check.** Conflict against a confirmed dealbreaker, preference mismatch, contradiction, and incomplete, each with its evidence. Deterministic field comparisons, no model in the decision path.
 - Structured rejection capture: a dimension, a severity, and the reason, with a keyword suggestion for the dimension.
 - A per-client rejection ledger: history by dimension, contradiction markers, and client-confirmed rules.
-- A send review that fires a conflict, a contradiction, or a plain prior-rejection note before a profile is shared, plus a strip showing what supports the send.
 - Client clarification: a rule is written only from a recorded client answer, never silently.
-- The acceptance debrief: capture what mattered and what surprised at the moment of a yes.
-- The learning-loop metric: of captured insights that had a later recommendation, how many were explicitly consulted.
+- A learning loop, built but presented as a next step: an acceptance debrief that captures what a client's yes taught the matchmaker, surfaced at the next send with a checkbox, and a metric for whether captured insights get consulted.
 - An operator-only measurement view, kept away from the matchmaker it would otherwise measure.
 
 ## Run it
@@ -50,10 +47,11 @@ npm test
 
 ## Demo
 
-Two beats, about two minutes total. Reset the demo before each beat.
+Three short beats, about two minutes total. Reset the demo before each beat.
 
-1. Open **Priya S.** Her ledger shows a contradiction on *Location or city tier*: rejected 3, then accepted 1. Send **Aarav M.** and the card shows both sides. Ask the client, record her answer, and the dimension settles. Send **Karan D.** and the card fires clean.
-2. Priya's acceptance insight from Arjun T. ("warmer in person, location mattered less") surfaces at the next send with a checkbox. Tick it and send, and the measurement view reports it consulted.
+1. Open **Priya S.** Her ledger shows a contradiction on *Location or city tier*: rejected 3, then accepted 1. Send **Aarav M.** and the check fires before anything goes out, showing the earliest rejection next to the profile she later accepted. Ask the client, record her answer, and the dimension settles. Send **Karan D.** and the check is clean.
+2. Open **Rahul M.** and send **Nikhil S.** The check fires a hard conflict against his confirmed dealbreaker on diet. A field comparison, no model, and the matchmaker still decides.
+3. Open **Meera J.** and send **Sam K.** The check says it has nothing to compare against, rather than implying no conflict.
 
 The word-for-word script is in [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md).
 

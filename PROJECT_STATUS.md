@@ -20,8 +20,8 @@ Phase 2 of The Date Crew product growth assessment. Phase 1 research and diagnos
 | `phase1/` | Five Phase 1 files, preserved unchanged, sha256 verified | Preserved |
 | `docs/` | Gate B specifications, review briefs and findings, interview protocol, curveball, AI usage, submission checklist, scorecard gate | Complete |
 | `src/` | Prototype source, zero dependency | Built |
-| `test/` | Rules, store, metrics, bootstrap and insights tests | 39 passing |
-| `screenshots/` | Clients, client detail, contradiction card | Captured |
+| `test/` | Rules, store, metrics, bootstrap, insights and UI regression tests | 43 passing |
+| `screenshots/` | Clients, client detail, contradiction card, confirmed-dealbreaker conflict | Captured and checked |
 | `README.md`, `PILOT_PLAN.md`, `ASSIGNMENT_SUBMISSION.md`, `docs/DEMO_SCRIPT.md` | Run, pilot, submission and demo documentation | Complete |
 | `PROJECT_STATUS.md` | This file | Current |
 
@@ -111,4 +111,4 @@ The five-conversation matchmaker interview protocol is prepared in `docs/INTERVI
 
 ## 10. Next
 
-Gate F. The submission response is written in `ASSIGNMENT_SUBMISSION.md` and keeps three claims separate: the red-team review as a scope-changing decision, the interview protocol as a validation plan, and the prototype as proof that the mechanism works technically. Nothing is deployed, published or emailed until the user approves external sharing.
+Gate F. The submission response is written in `ASSIGNMENT_SUBMISSION.md`, restructured to the brief's own headings and word limits, with the pre-send check as the centrepiece and the acceptance debrief demoted to a next step. It keeps three claims separate: the red-team review as a scope-changing decision, the interview protocol as a validation plan, and the prototype as proof that the mechanism works technically. Nothing is deployed, published or emailed until the user approves external sharing.

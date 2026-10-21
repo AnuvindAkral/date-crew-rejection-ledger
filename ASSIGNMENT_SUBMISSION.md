@@ -1,58 +1,127 @@
-# The Date Crew: Product Growth Assessment
+---
+title: The Date Crew - Product Growth Assessment
+status: submission response
+created: 21 October 2026
+---
 
-The primary submission response. Supporting research, decisions, tests and documentation live in `docs/` and `phase1/`.
+# The Date Crew · Product Growth Assessment
 
-A note on structure: the original assessment brief is not saved in this repository, so its exact section titles and word limits could not be re-verified. The three sections below follow the limits I was given: roughly 300 words for the diagnosis, 500 for the solution, and 200 for the curveball response.
+Answers to the assessment brief. Section lengths follow the brief: Part 1 about 300 words, Part 2 about 500, Part 4 under 200.
 
-## Diagnosis
+## Part 1 · Diagnose the problem
 
-The brief gave me a funnel: 1,000 profiles shared, 310 accepted, 210 contact details shared, 150 conversations, 75 meetings fixed, 42 completed. That is 4.2% of shared profiles ending in a completed meeting.
+### The three questions I would investigate
 
-The obvious headline is the 690 rejections at the first step. But the number worth acting on is narrower, and its denominator is ambiguous. About 35% of rejections were for reasons the client had already stated in their preferences. If that means 35% of the 690, it is about 242 profiles, or 24% of everything shared. If it means 35% of all 1,000, it is 350. The two readings differ by more than a hundred profiles, so I never treated either as settled.
+**1. Why are clients rejecting profiles, and how many rejections conflict with something already on the client's file?** It separates preventable errors from ordinary selectivity. Only the conflict subset is fixable.
 
-Two other things I refused to lean on. The public site's own success figures conflict with each other, 1,000+ matches on one page and 10,000+ connections on another, so I anchored on the supplied funnel rather than marketing numbers. And the two matchmakers' acceptance rates, 44% against 21%, cannot be read as skill without controlling for the clients and sources each one handles.
+**2. Where do clients drop off after they accept a profile?** 310 accepted became 42 completed meetings. Most of the loss sits downstream of acceptance, which tells me whether to work on the first stage at all.
 
-The problem I chose is not "matchmakers send too many bad profiles." It is narrower and more tractable: rejection feedback, the signal the founder herself says matters most, arrives as unstructured free text and cannot be reused, and the positive half of the loop, why a client said yes, was never captured at all.
+**3. Why does acceptance differ between matchmaker A at 44% and matchmaker B at 21%?** If the gap is case mix or sourcing, the fix is allocation. If it is practice, there is something worth codifying.
 
-## Solution
+### The biggest problem in the funnel
 
-I built two pieces on one prototype.
+The largest loss is the first stage: 690 rejections. The largest *addressable* problem is the slice where the profile conflicted with what the client had already said. If the reported 35% is counted against all 690 rejections, that is roughly 242 profiles, about 24% of everything shared.
 
-The Rejection Ledger turns a rejection into a structured record: a dimension, a severity, and the reason in the matchmaker's own words. It keeps a per-client history and, at the moment the matchmaker is about to send the next profile, surfaces either a conflict or a contradiction. A confirmed dealbreaker is a deterministic check. A historical rejection is evidence, never a standing rule; the only thing that can change a preference is a recorded client answer. Missing information is never shown as a clean bill of health.
+I am assuming the 35% is reliable enough to act on, that the denominator is rejections rather than all shared profiles, and that the conflicts were knowable at send time. If the denominator is 1,000, the number is 350 and the case is stronger. If they were not knowable then, the problem is upstream and no pre-send check helps.
 
-The acceptance debrief adds the missing positive signal. When a client accepts someone, or a date goes well, the matchmaker records what mattered and what surprised them. That insight appears at the next send review with a checkbox, and the matchmaker marks whether it informed the recommendation. The metric is the proportion of captured insights, among those with a later recommendation to inform, that were explicitly consulted. It measures whether the loop is used, not whether matching improved. An insight with no later recommendation is not counted as unconsulted.
+### The three metrics I would track
 
-My first instinct was to make the debrief client-facing: show the client "you rejected three for location, then accepted one," and ask if the next objection was about the profile or the person. I ran an independent red-team review with permission to kill it, and it did. The mechanism I thought I was inventing already existed as the contradiction card, so the only new part was making it client-facing, which reversed our own decision to keep everything matchmaker-side. Worse, it risked the exact clients a premium service protects: someone with a firm boundary gets the service doubting them, someone filtering for their family gets forced to disclose the filter or fake consistency. So I dropped the client-facing idea and kept the positive signal matchmaker-side.
+**1. Preference-conflict rate at send time.** Conflicts per 100 profiles shared, confirmed-dealbreaker conflicts reported separately from softer preference mismatches. The number the work can move, and it moves before the expensive stages.
 
-I also considered a per-sourcing-channel scorecard and rejected it. The synthetic data has two to five candidates per channel, so any channel-level rate would be noise presented as insight. The source field stays on every candidate, ready if real data ever supports it.
+**2. Profile acceptance rate, segmented by client and matchmaker.** The outcome the business already tracks, and the check that metric one is not being improved by sending less.
 
-The prototype is a zero-dependency Node app: five matchmaker-side screens, 40 passing tests, synthetic data throughout, no model call, no API key.
+**3. Completed meetings per 100 profiles shared.** Baseline 4.2%. The only metric connecting the top of the funnel to the business outcome, and the guardrail against a tool that narrows the pool and looks like progress.
 
-What remains unvalidated is whether acceptance carries information rejection does not, and whether the debrief fits a real matchmaker's workflow. The five-conversation interview protocol for those questions is prepared in `docs/INTERVIEW_PROTOCOL.md` and has not been run.
+## Part 2 · Design a solution
 
-## Curveball
+### Problem
 
-**"Your red-team review showed the client-facing idea was dangerous and the ledger already existed. What did you add that a thoughtful matchmaker with a notebook can't already do?"**
+Matchmakers share profiles that conflict with what the client has already said. The information exists, but it lives in an onboarding call, email threads and memory, so it is not available at the moment of sending. Around 242 rejections a month were for reasons already in the client's preferences. Each one costs a message, a client, and some faith in the service.
 
-Not much, for one excellent matchmaker with a perfect memory. The product does not replace judgement; it keeps judgement from degrading as the caseload grows.
+### User
 
-A matchmaker with eight clients cannot keep every rejection, every reason, every yes in their head. TDC's own pitch is "people who remember your story by heart, not from a database," which is exactly what breaks under load. A notebook works for one person and fails the moment a client changes hands or a matchmaker has a busy week.
+The matchmaker, on the sending side of the email. One person.
 
-The two pieces add two things. The ledger makes rejection history retrievable at the moment of a send. The debrief captures the one thing a notebook usually skips, the reason a client said yes. The consultation metric is the honest part: it measures whether the captured learning is actually used, not whether it works.
+### Solution
 
-The claim is small: it reduces the cost of remembering and makes forgetting visible. If that is not worth building, the answer is more matchmakers, a real option, just more expensive.
+A pre-send check inside the share flow the matchmaker already uses. When they are about to share a profile, the tool loads that client's recorded preferences and confirmed dealbreakers, compares them with the candidate's known attributes, and returns one of four states before anything goes out.
 
-## Implemented versus proposed
+- **Conflict.** A confirmed dealbreaker matches. A deterministic field comparison, and the only state treated as a firm no.
+- **Preference mismatch.** A stated preference matches. Advisory.
+- **Contradiction.** The client rejected on this dimension before and later accepted someone with it. A prompt to ask, not a rule.
+- **Incomplete.** No preferences on file, or the candidate has no attributes. Never reported as "no conflict", because missing information is not agreement.
 
-**Implemented:** the rejection ledger, the deterministic dealbreaker and contradiction checks, client clarification with recorded answers, the acceptance debrief, the learning-loop metric, and the operator-only measurement view. All run in a working prototype with synthetic data.
+A preference and a dealbreaker stay visibly different. A preference is a stated criterion the client might still trade against. A dealbreaker is one the client has confirmed they will not move on, and only the client can confirm that. The tool never upgrades one into the other.
 
-**Proposed, not built:** anything client-facing, any ranking or compatibility score, and the sourcing-channel scorecard. The scorecard is gated on data the prototype does not have, and the client-facing idea was rejected by the red-team review.
+The matchmaker proceeds, holds, or resolves. Nothing is blocked automatically, no preference changes without a recorded client answer, and every override is logged with a reason.
 
-## What is included and what is not
+When a client rejects a shared profile, the reason is captured as a dimension, a severity, and the original wording, so the next send has history to work from.
 
-- **Working prototype:** yes. Run `node src/server.js`, open http://localhost:4321. Demo script in `docs/DEMO_SCRIPT.md`.
-- **Tests:** `node --test`, 40 pass.
-- **Screenshots:** three in `screenshots/`, re-captured against the current build and checked against the demo script.
-- **Code repository:** local git only, no remote yet.
-- **AI usage:** disclosed in `docs/AI_USAGE.md`. The only AI-shaped part is a keyword heuristic that proposes a dimension from free text, and a human confirms it. No scoring, ranking, or preference writes.
-- **Updated resume:** not done. Requires my actual resume and review.
+### Data
+
+Client preferences and confirmed dealbreakers, each with its confirmation status and timestamp. Candidate attributes. Past rejections with coded dimension, severity and verbatim text. Past acceptances. Share events recording what was checked, what was flagged and what was sent, so the first metric can be read per client and per matchmaker rather than pooled.
+
+### Technology
+
+Node and a small local store, with a plain browser interface. No model sits in the decision path, because the two checks that matter are comparisons of a known preference against a known attribute. The one place AI helps is normalising a free-text rejection into a proposed dimension, and a human confirms it, because that is what keeps capture to a few seconds. A matchmaker typing "not based in Bangalore, won't relocate" should not have to pick a dimension from a list of twelve.
+
+### Success metric
+
+Preference-conflict rate at send time falls, while profile acceptance rate and completed meetings per 100 shared do not fall. The first moves because specific conflicts stop being sent. The other two are the guardrail that it stopped by narrowing rather than by improving.
+
+## Part 3 · The prototype
+
+A working Node app, no dependencies, synthetic data, 43 passing tests.
+
+```bash
+node src/server.js   # http://localhost:4321
+node --test
+```
+
+The demo, about two minutes. Press **Reset demo** before each beat.
+
+1. **Open Priya S.** Her rejection ledger shows a contradiction on location: rejected 3, accepted 1.
+2. **Send Aarav M.** The check fires before anything is sent, showing the earliest rejection in the matchmaker's own words next to the profile she later accepted, and asks one question: dealbreaker or preference?
+3. **Ask the client**, type her answer, choose **Preference**. A rule is written, and only from her recorded words.
+4. **Send Karan D.** The check is clean, because the dimension is settled.
+5. **Open Rahul M.** and send **Nikhil S.** The check fires a hard conflict against his confirmed dealbreaker on diet, which is the deterministic case.
+6. **Open Meera J.** and send **Sam K.** The check says it has nothing to compare against, rather than implying no conflict.
+
+Screenshots are in `screenshots/`. The full script is in `docs/DEMO_SCRIPT.md`.
+
+Also built, and not part of the claim above: an acceptance debrief that captures what a client's yes taught the matchmaker, surfaced at the next send. It is the obvious next question after rejections, since the literature on mate preferences is consistent that stated preferences predict what people avoid better than what they choose. It is a next step, not the thesis, and I have no evidence yet that matchmakers fail to capture it today.
+
+## Part 4 · One curveball
+
+**1. What I would check first.** Whether the check was used when profiles were sent. A tool nobody opens changes nothing, a cheaper explanation for a flat metric than the reasoning being wrong. I would instrument exposure separately from agreement: "shown" and "looked at" are different events.
+
+**2. What data I would look at.** Conflict rate before and after by matchmaker, not pooled. How often the check was shown, consulted and overridden, and why. Whether the profiles it flagged were in fact rejected for the same reason, which tests the flagging. Whether the 35% was classified consistently, by re-coding a sample of the original rejections blind.
+
+**3. Iterate, change, or kill.** If it was rarely consulted, that is a workflow problem, so I would move it earlier in the send flow. If it was consulted and conflicts did not fall, I would review the preference records with matchmakers, since the data may be wrong. If conflicts fell and completed meetings did not, the problem is downstream and I would stop expanding the tool. One defined test window for the smallest iteration; if the behaviour still does not change, I would stop and ask whether this needs a tool at all.
+
+## AI usage
+
+- **Tools:** Claude for research synthesis, code, and drafting, plus a separate fresh-context Claude session used only as a red-team reviewer.
+- **Used for:** reading The Date Crew's public material and the behavioural literature, writing and testing the Node prototype, and drafting these documents.
+- **Where I disagreed:** an early draft of mine overstated what a meta-analysis in the mate-preference literature found, and my own first proposal was a client-facing feature that showed clients their own rejection history. The independent review caught both. I corrected the citation, and I kept the rejection history on the matchmaker's side of the screen.
+- **Not used for:** the decisions. The product direction, the scope cut after review, and these answers are mine.
+
+## What I left out, and why
+
+- **A sourcing-channel scorecard.** With two to five candidates per channel in the available data, any channel-level rate would be noise presented as insight, so I did not build one.
+- **Client-facing prompts.** A matchmaker asking the client one question in a normal check-in does the same work without putting the service in the position of doubting a client who has a firm boundary.
+- **Compatibility scoring or ranking.** It needs outcome labels this business will not have for a year, and it would put a model where the brand says a human must be.
+
+## Limits of this answer
+
+No matchmaker has been interviewed and no real client data has been seen, so every claim about workflow fit is a hypothesis. The prototype shows the mechanism works; it does not show the metric moves. The 35% denominator is unconfirmed, the funnel period and cohort are unknown, and the 44% against 21% gap is not interpretable without case-mix and channel control. The open questions and the cheapest way to answer them are in `docs/VALIDATION_PLAN.md`.
+
+## Submission checklist
+
+| Required | Where |
+| --- | --- |
+| Answers | This document |
+| Prototype | Screenshots in `screenshots/`, run instructions above, code in the repository |
+| Code | Local repository, no remote yet, publishing on approval |
+| AI usage | The section above, four lines |
+| Updated resume | Not done. It needs your actual resume and your sign-off, and I will not write one for you |

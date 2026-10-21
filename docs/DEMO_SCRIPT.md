@@ -1,6 +1,6 @@
 # Demo script
 
-A verified walkthrough of the actual application, in two beats, about two minutes total.
+A verified walkthrough of the actual application, about two minutes.
 
 ## Commands
 
@@ -16,64 +16,56 @@ All data is synthetic. Every name is invented.
 
 ---
 
-## Beat 1: the contradiction (about 75 seconds)
+## Beat 1: the check fires before anything is sent (about 60 seconds)
 
-### Act 1: the contradiction (about 45 seconds)
+This is the core idea: the matchmaker sees the conflict while they can still do something about it.
 
-**1. Land on Clients.** Three clients: Priya S., Rahul M., Meera J. Priya's card reads "contradiction to resolve".
+**1. Open Priya S.** Point at the Rejection ledger panel.
 
-> Say: "Priya has been rejecting on location, but she just accepted someone on location. That disagreement is the thing the ledger exists to surface."
+> "Rejected three on location or city tier, accepted one. Same dimension, opposite decisions."
 
-**2. Open Priya S.** Point at the Rejection ledger panel.
+**2. Send Aarav M.** The check fires before the profile goes anywhere. Point at the two panels side by side.
 
-> "Rejected three on location or city tier, accepted one. The system flags the contradiction, not a rule."
+> "The earliest rejection, in the matchmaker's own words, next to the profile she later accepted. It asks one question: is this a dealbreaker, or a preference?"
 
-**3. Send Aarav M.** The card fires in the contradiction state. Point at the two panels side by side.
-
-> "The earliest rejection, in the matchmaker's own words, next to the profile she later accepted. Same dimension, opposite decisions."
-
-**4. Ask the client.** Type what she said, then choose **Preference**.
+**3. Ask the client.** Type what she said, then choose **Preference**.
 
 > "The matchmaker asked one question in the check-in. The client said location is a preference, not a dealbreaker, as long as the person is settled about it."
 
-### Act 2: the settled send (about 30 seconds)
+**4. Send Karan D.** The check is clean.
 
-**5. Back on Priya's ledger.** Location now reads "Client-confirmed: preference".
+> "The dimension is settled, so the send goes out without a prompt. Nothing was filtered automatically."
 
-> "Only the client's answer wrote that rule. Nothing was changed silently."
+## Beat 2: the deterministic case (about 30 seconds)
 
-**6. Send Karan D.** The card fires clean.
+**5. Open Rahul M.** His Preferences panel shows **Diet or lifestyle · confirmed dealbreaker**, quoting his own note: "Non-vegetarian is a definite no."
 
-> "Two weeks ago this same candidate would have prompted a contradiction. Now the dimension is settled, and the send goes out without a prompt."
+**6. Send Nikhil S.** The check fires a hard conflict.
 
-**Stop here.** The intervention did not filter anyone out. It turned a repeated contradiction into a settled question, then stopped asking.
+> "This is the case the assessment asks about. A confirmed dealbreaker, compared to a known attribute of the candidate. No model, no interpretation, a field comparison. It still does not block the send. The matchmaker decides."
+
+## Beat 3: nothing to compare against (about 15 seconds)
+
+**7. Open Meera J.** and send **Sam K.**
+
+> "No preferences on file, so the check says it has nothing to compare against. It does not say no conflict, because missing information is not agreement."
 
 ---
 
-## Beat 2: the acceptance debrief (about 45 seconds)
+## Also built, a next step rather than the claim (about 30 seconds)
 
 Press **Reset demo** first.
 
-**7. Open Priya S.** Point at the "Acceptance insights" panel. It shows one positive capture: *accepted Arjun T., Personality or temperament: "Warmer and calmer in person than his profile suggested. Location mattered less than she expected."*
+**8. Open Priya S.** The "Acceptance insights" panel shows one positive capture: *accepted Arjun T., Personality or temperament: "Warmer and calmer in person than his profile suggested. Location mattered less than she expected."*
 
-> Say: "The ledger captures the rejections. This captures the other half: what a yes taught us. Nothing here was inferred from the profile. The matchmaker wrote it down."
+**9. Send Aarav M.** The insight appears in the send review with a checkbox. Tick it and send. The measurement view reports it consulted.
 
-**8. Send Aarav M.** The send review now carries the insight, with a checkbox. Tick the checkbox, then Send.
-
-> Say: "The matchmaker explicitly marks that this insight informed the recommendation. That is the whole loop: capture the yes, then consult it at the next send."
-
-**9. Open Measurement.** The learning-loop number reads 1 / 1 = 100% consulted.
-
-> Say: "It measures whether the loop is used, not whether matching improved. And an insight with no later recommendation is not counted as unconsulted."
-
-**Stop here.** The debrief adds the positive signal the ledger lacked, without asking the client to defend a rejection.
+> "Rejections tell the matchmaker what to avoid. This captures what a yes taught them. It is the obvious next question, but I have no evidence that matchmakers fail to capture it today, so it is a next step and not the claim."
 
 ---
 
 ## Optional: the other states (about 30 seconds each)
 
-- **Rahul M.** shows a confirmed dealbreaker. Send **Nikhil S.** and the deterministic conflict card fires on *Diet or lifestyle*, quoting the client's own note. Send **Dev P.** for a clean send, and **Siddharth B.** for the untagged state, which is never shown as compatible.
-- **Meera J.** has no feedback yet. Send **Sam K.** and the card says so rather than implying a clean bill of health.
 - **Accept** any candidate to see the debrief sheet: pick what mattered, write what surprised you.
 - **Reject** any candidate to see the capture sheet. Type a reason like "not based in Bangalore, won't relocate" and watch the suggestion propose *Location or city tier*, which the matchmaker confirms.
 - **Measurement** (top nav) is the operator view: session counts, Metric A and ARCR with denominators, the learning-loop metric, and the reference scenario from the assessment brief. It is for the pilot operator, not the matchmaker.
@@ -82,4 +74,4 @@ Press **Reset demo** first.
 
 ## What this demo does not prove
 
-The demo shows the mechanism works. It does not claim the debrief improves matching, that ARCR falls, that completed meetings rise, or that any business metric moves. Those need the proposed pilot in [PILOT_PLAN.md](../PILOT_PLAN.md) and the unrun interviews in [INTERVIEW_PROTOCOL.md](INTERVIEW_PROTOCOL.md), not a local prototype.
+The demo shows the mechanism works. It does not claim the conflict rate falls, that completed meetings rise, or that any business metric moves. Those need the pilot in [PILOT_PLAN.md](../PILOT_PLAN.md) and the unrun interviews in [INTERVIEW_PROTOCOL.md](INTERVIEW_PROTOCOL.md), not a local prototype.

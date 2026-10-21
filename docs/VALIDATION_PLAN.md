@@ -15,6 +15,9 @@ The point of this document is to be specific about what is assumed, so that the 
 | A5 | The learning-loop metric, consultation rate, is a meaningful proxy | It measures use, not effect. Whether use predicts effect is unknown |
 | A6 | The 35% stated-preference figure means what reading A suggests | The denominator is ambiguous and the source has not been checked |
 | A7 | Channel is a meaningful axis for unsuitable introductions | Never tested, which is why the scorecard was excluded |
+| A8 | The criteria on file match what the client would say today | The check compares against them. A stale or wrong criterion produces a wrong check, and the tool has no way to tell |
+| A9 | A matchmaker will keep the criteria on file current | Nothing in the system reminds them. The change log records drift after the fact, it does not prevent it |
+| A10 | Enough shares are checked for the rate to mean anything | The rate is measured on checked shares only, and coverage is reported beside it. A pilot with low coverage would produce a number that looks precise and is not |
 
 ## Proposed validation steps
 
@@ -38,7 +41,7 @@ Do not pitch the debrief or the scorecard before question five. The point is to 
 
 With two or three matchmakers and synthetic candidates, run the send review on cases they bring themselves. Measure how long the review takes, whether they look at the ledger, and whether it changes what they would send.
 
-**What it settles.** A3 and A4, and it produces the capture latency figure the feasibility bar needs, which the prototype cannot produce because it runs on synthetic data.
+**What it settles.** A3, A4 and A9, and it produces the capture latency figure the feasibility bar needs, which the prototype cannot produce because it runs on synthetic data. It should also cover the two steps the prototype makes easy and reality makes hard: keeping the client's criteria on file, and looking at the check at the moment of sending.
 
 ### Step 3: check the denominator of the 35%
 

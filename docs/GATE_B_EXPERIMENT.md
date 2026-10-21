@@ -1,6 +1,6 @@
 ---
 title: Gate B - Experiment design
-status: draft
+status: closed, superseded by the final build
 created: 21 October 2026
 phase: 2B
 depends_on: docs/GATE_B_METRICS.md

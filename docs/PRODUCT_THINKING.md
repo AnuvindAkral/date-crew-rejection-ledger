@@ -18,7 +18,9 @@ The yes is rarer and cleaner. Nobody was capturing why a client said yes.
 
 The ledger answers "what has this client already told us, and what should I remember before I send the next profile." The debrief answers "what did their yes teach us that the rejection history cannot."
 
-They share one rule: neither one decides. A confirmed dealbreaker is handled deterministically, but everything else is surfaced as evidence and left to the matchmaker. The reason is that choosing who meets whom is the thing The Date Crew sells, and a product that automates it would be selling something else.
+They share one rule: neither one decides. A confirmed dealbreaker is handled deterministically, but everything else is surfaced as evidence and left to the matchmaker.
+
+The criteria are compared as values, not as categories, because that is the difference between a check and a proxy. A candidate who is vegetarian does not trip a non-vegetarian dealbreaker, and a candidate in Pune does not look like a match for a stated preference for the Bangalore metro. Where a candidate's value on a dimension the client cares about is simply unknown, the tool says so rather than guessing. The reason is that choosing who meets whom is the thing The Date Crew sells, and a product that automates it would be selling something else.
 
 ## The assumptions this rests on
 

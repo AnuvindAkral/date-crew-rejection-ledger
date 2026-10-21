@@ -1,6 +1,6 @@
 ---
 title: The Date Crew Rejection Ledger - Project Status
-status: Phase 2, prototype complete
+status: Prototype complete, awaiting publication
 created: 21 October 2026
 workspace: /Users/anuvindmac/Documents/DIY Setup/date-crew-rejection-ledger
 ---
@@ -18,11 +18,11 @@ Phase 2 of The Date Crew product growth assessment. Phase 1 research and diagnos
 | Path | Contents | State |
 | --- | --- | --- |
 | `phase1/` | Five Phase 1 files, preserved unchanged, sha256 verified | Preserved |
-| `docs/` | Gate B specifications, review briefs and findings, interview protocol, curveball, AI usage, submission checklist, scorecard gate | Complete |
+| `docs/` | The document index, Gate B specifications, review briefs and findings, interview protocol, curveball, AI usage, submission checklist, scorecard gate | Complete |
 | `src/` | Prototype source, zero dependency | Built |
-| `test/` | Rules, store, metrics, bootstrap, insights and UI regression tests | 43 passing |
-| `screenshots/` | Clients, client detail, contradiction card, confirmed-dealbreaker conflict | Captured and checked |
-| `README.md`, `PILOT_PLAN.md`, `ASSIGNMENT_SUBMISSION.md`, `docs/DEMO_SCRIPT.md` | Run, pilot, submission and demo documentation | Complete |
+| `test/` | Rules and the ten decision-logic scenarios, data entry and validation, metrics, store, bootstrap, insights and UI regression tests | 85 passing |
+| `screenshots/` | Clients, client detail, contradiction card, confirmed-dealbreaker conflict, candidates view, criterion entry, measurement | Captured and checked, zero console errors |
+| `README.md`, `PILOT_PLAN.md`, `ASSIGNMENT_SUBMISSION.md`, `docs/DEMO_SCRIPT.md`, `docs/README.md` | Run, pilot, submission, demo and index documentation | Complete |
 | `PROJECT_STATUS.md` | This file | Current |
 
 Local git repository, no remote. gitleaks pre-commit hook active.

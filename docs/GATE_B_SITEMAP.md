@@ -1,6 +1,6 @@
 ---
 title: Gate B - Sitemap
-status: draft
+status: closed, superseded by the final build
 created: 21 October 2026
 phase: 2B
 depends_on: phase1/SITEMAP.md

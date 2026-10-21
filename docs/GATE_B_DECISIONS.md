@@ -1,6 +1,6 @@
 ---
 title: Gate B - Decisions and trade-offs
-status: draft
+status: closed, superseded by the final build
 created: 21 October 2026
 phase: 2B
 depends_on: docs/GATE_B_METRICS.md, docs/GATE_B_EXPERIMENT.md

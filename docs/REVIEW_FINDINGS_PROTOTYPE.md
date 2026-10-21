@@ -1,6 +1,6 @@
 ---
 title: Gate C - Prototype review findings and reconciliation
-status: reconciled
+status: closed, superseded by the final build
 created: 21 October 2026
 phase: 2C
 reviewer: independent model, fresh context

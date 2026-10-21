@@ -95,7 +95,11 @@ Stage definitions are written once, before the window, and applied identically b
 
 ## 9. Metrics
 
-**Primary.** Avoidable repeat-conflict rate (ARCR), client level. Numerator: eligible shared profiles rejected for a dimension with a prior coded rejection before the share. Denominator: eligible shared profiles. Reported with three sub-rates: hard-conflict, contradiction-conditional and plain-recurrence. ARCR measures recurrence, not avoidability.
+**Primary.** Confirmed-criterion conflict rate at send time, client level. Numerator: profiles shared where the send-time check reported a conflict against a client-confirmed criterion, a confirmed dealbreaker or a confirmed preference. Denominator: profiles shared and checked. The check is recomputed by the server at the moment of sending, so the numerator is a fact about the send rather than a claim by the interface.
+
+Three numbers are reported alongside it, because the rate alone can flatter itself. **Coverage**, the share of all profiles that were checked, because a rate that improves because the tool was used less is not an improvement. **Unknown**, the share of checked profiles where the check could not be made because a candidate attribute is missing, which is never counted as clean. And the **override rate**, the share of detected conflicts that still reached the client.
+
+**Diagnostic.** Avoidable repeat-conflict rate (ARCR), client level. Numerator: eligible shared profiles rejected for a dimension with a prior coded rejection before the share. Denominator: eligible shared profiles. Reported with three sub-rates: hard-conflict, contradiction-conditional and plain-recurrence. ARCR measures recurrence, not avoidability, and the historical stated-preference conflict rate sits beside it as a post-hoc comparison to the brief's 35% figure.
 
 **Diagnostic.** Metric A, stated-preference conflict rate, using the assessment's 35% as a provisional baseline only.
 

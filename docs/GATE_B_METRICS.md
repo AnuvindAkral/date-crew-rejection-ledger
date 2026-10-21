@@ -1,12 +1,14 @@
 ---
 title: Gate B - Metric definitions
-status: draft
+status: closed, superseded by the final build
 created: 21 October 2026
 phase: 2B
 depends_on: phase1/EXPERIMENT.md
 ---
 
 # GATE B: METRIC DEFINITIONS
+
+> **Superseded.** The primary metric in the final build is the confirmed-criterion conflict rate at send time, defined in [`../ASSIGNMENT_SUBMISSION.md`](../ASSIGNMENT_SUBMISSION.md) and implemented in `src/lib/metrics.js` as `computeSendTimeMetrics`. The two metrics below are kept as the working record of the design at Gate B, and Metric A survives as a post-hoc diagnostic. Read this file for the reasoning, not for the current definition.
 
 This file resolves the two metrics and the guardrails. It supersedes the Phase 1 "Contradiction Rate" wording, which conflated stated preferences with rejection history and left the denominator ambiguous.
 

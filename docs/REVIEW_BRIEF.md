@@ -1,6 +1,6 @@
 ---
 title: Gate B - Independent review brief
-status: ready for review
+status: closed, superseded by the final build
 created: 21 October 2026
 phase: 2B
 ---

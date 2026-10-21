@@ -14,7 +14,7 @@ The decisions that shaped the product, the trade-offs each one accepted, and the
 
 ## 2. A rejection is evidence, never a permanent rule
 
-**Decision.** A matchmaker can record a rejection as a likely dealbreaker, but that does not become a confirmed dealbreaker until the client says so. The only code path that writes a client preference requires a recorded client answer with the client's own words.
+**Decision.** A matchmaker can record a rejection as a likely dealbreaker, but that does not become a confirmed dealbreaker until the client says so. The only code path that writes a client preference requires a recorded client answer with the client's own words and a value. A confirmed preference settles a dimension until the client rejects on it again, and never longer.
 
 **Trade-off.** Some genuinely avoidable repeats get through, because a matchmaker has not yet asked. That is the intended behaviour: the tool prompts the question rather than silently enforcing a rule.
 
@@ -38,13 +38,21 @@ The decisions that shaped the product, the trade-offs each one accepted, and the
 
 ## 5. Missing information is never treated as a clean result
 
-**Decision.** An untagged candidate, a client with no history, and a client whose feedback is all uncoded are three separate states, and none of them is "no conflict".
+**Decision.** An untagged candidate, a client with no history, a client whose feedback is all uncoded, and a candidate whose value on a dimension the client cares about is unknown, are four separate states, and none of them is "no conflict".
 
 **Trade-off.** The clean state is rarer than it could be, and the card appears more often than a marketing demo would suggest.
 
 **Rejected.** Treating absent data as an absence of conflict, which is the same mistake as treating a rejection as a permanent rule, in the other direction.
 
-## 6. The acceptance debrief stays matchmaker-side
+## 6. Criteria are compared as values, not as categories
+
+**Decision.** A preference and a candidate attribute each carry a dimension and a value, and the check compares the two values. A candidate who is vegetarian does not trip a non-vegetarian dealbreaker.
+
+**Trade-off.** The matchmaker has to record a value, not just tick a category, so capture takes one more decision than it used to.
+
+**Rejected.** Comparing dimensions on their own. It looks like a check but it is a proxy: a candidate tagged with any diet attribute would have tripped a non-vegetarian dealbreaker, and a candidate in any city would have looked like a match for a preference for the Bangalore metro. The proxy would have produced false conflicts and false support, and both would have looked like findings.
+
+## 7. The acceptance debrief stays matchmaker-side
 
 **Decision.** When a client accepts someone, the matchmaker records what mattered and what surprised them. That insight surfaces at the next send with a checkbox. Nothing is inferred from the profile, and no insight is created without a human writing one.
 
@@ -52,7 +60,7 @@ The decisions that shaped the product, the trade-offs each one accepted, and the
 
 **Rejected.** The client-facing version. My first instinct was to show the client their own history and ask whether the next objection was about the profile or the person. The red-team review found that the mechanism already existed matchmaker-side, so the only new part was the client-facing part, and that part reversed decision 1 and carried the trust risk.
 
-## 7. The learning-loop metric measures use, not effect
+## 8. The learning-loop metric measures use, not effect
 
 **Decision.** The headline metric is the proportion of captured insights, among those that had a later recommendation to inform, that were explicitly consulted. Insights with no later recommendation are excluded from the denominator rather than counted as unconsulted.
 
@@ -60,7 +68,7 @@ The decisions that shaped the product, the trade-offs each one accepted, and the
 
 **Rejected.** Any metric that treats consultation as an outcome, and any metric that rewards persuading clients to meet someone. The accepted-to-completed-meeting rate remains the guardrail that would actually matter, and it is a later question.
 
-## 8. The sourcing scorecard is excluded
+## 9. The sourcing scorecard is excluded
 
 **Decision.** No channel-level view is built. The source field stays on every candidate so the comparison is possible if real data ever supports it.
 
@@ -68,7 +76,7 @@ The decisions that shaped the product, the trade-offs each one accepted, and the
 
 **Rejected.** Building it anyway on synthetic data. With two to five candidates per channel, any channel-level rate would be noise presented as insight. The full reasoning is in `docs/SOURCING_SCORECARD_GATE.md`.
 
-## 9. The model only suggests a tag
+## 10. The model only suggests a tag
 
 **Decision.** The one AI-shaped component proposes a dimension from free-text rejection feedback, and a human confirms or changes it. Everything that affects a decision is deterministic.
 
@@ -76,10 +84,55 @@ The decisions that shaped the product, the trade-offs each one accepted, and the
 
 **Rejected.** Letting a model write a preference, decide a conflict, or draft a client message. The first two would breach the constraints above, and the third touches the most trust-sensitive thing a matchmaker sends.
 
-## 10. What the prototype is and is not
+## 11. The records are the interface, not the source code
+
+**Decision.** Clients, candidates, matchmakers and client criteria are created and edited through the interface, with validation on every write and stable ids behind every dropdown.
+
+**Trade-off.** It is more surface area than a prototype strictly needs, and it is work that would be replaced by a real system anyway.
+
+**Rejected.** Leaving the seed data as the only way to get records in. A reviewer would have to edit a JavaScript file to see the product work, and the brief is explicit that a prototype nobody can exercise is not a prototype. The "acting as" a matchmaker selector also forces the attribution question, which per-matchmaker metrics need anyway.
+
+## 12. The primary metric is measured at the moment of sending
+
+**Decision.** The server recomputes the check when a profile is shared and records it on the share event. The primary metric is confirmed-criterion conflicts over profiles shared and checked, with the two conflict components reported apart, coverage reported alongside, and the override rate reported separately.
+
+**Trade-off.** The denominator is the profiles that were checked rather than every profile shared, which is a deliberate deviation from the brief's wording, explained in the measurement view and in the submission.
+
+**Rejected.** Measuring the rate after the fact from rejections alone. It answers a different question, it cannot separate a conflict that was caught from one that reached the client, and it cannot be computed for the control arm, which is the comparison the whole pilot design rests on.
+
+## 13. What the prototype is and is not
 
 **Decision.** The prototype is a mechanism demonstration on synthetic data, with a proposed pilot written up in `PILOT_PLAN.md` and a validation plan in `docs/VALIDATION_PLAN.md`. It is not described as production-ready, and no result is claimed from it.
 
 **Trade-off.** Nothing has been measured with a real user, so the central assumption remains untested.
 
 **Rejected.** Presenting the working demo as evidence that matchmakers need the product. A demo proves the mechanism works, not that anyone wants it.
+
+---
+
+## Feature classification
+
+Every feature that exists in the build, classified against the brief's four categories.
+
+| Feature | Class | Why |
+| --- | --- | --- |
+| Pre-send check against the client's criteria | Core | The whole hypothesis. Without it there is no product |
+| Value-level comparison of criteria to attributes | Core | A category comparison is a proxy, and a proxy produces false conflicts and false support |
+| Client criteria as records, with kinds and values | Core | The check has nothing to compare against without them |
+| Rejection capture: dimension, severity, value, verbatim | Core | It is the mechanism that creates the history the check runs on |
+| The four states, including incomplete and untagged | Core | They are what stops missing data reading as a clean result |
+| Matchmaker records and the acting-as selector | Supporting | Attribution is needed for per-matchmaker reads, and the brief asks for a matchmaker to be selectable |
+| Data entry for clients, candidates and criteria | Supporting | The brief requires a reviewer to be able to exercise the workflow without editing code |
+| The ad-hoc check from the Candidates view | Supporting | Lets a reviewer pick a client and a profile and see the check with nothing sent |
+| Validation on every write, with a message naming the field | Supporting | A record that cannot be created is a feature that does not exist |
+| Criterion change log and withdrawal | Supporting | A preference change has to be explicit and traceable, and a withdrawn criterion must not vanish |
+| Rejection ledger by dimension, with contradiction markers | Supporting | It is the history the check reads, and it is what the matchmaker consults when the check is not enough |
+| Client clarification, and a rule written only from the client's words | Supporting | It is how a contradiction is settled without the tool guessing |
+| The send-time conflict rate, coverage, and the override rate | Supporting | The primary metric, and the only way to tell the two pilot arms apart |
+| Acceptance debrief, surfaced at the next send | Later | A sensible next question, but there is no evidence matchmakers fail to capture it today |
+| The learning-loop consultation metric | Later | It measures use, not effect, and it is only meaningful if the debrief is used |
+| The keyword dimension suggestion | Later | A convenience standing in for a model, and the only place a model would sit |
+| Sourcing-channel scorecard | Removed | The data cannot support a channel-level rate. See `SOURCING_SCORECARD_GATE.md` |
+| Compatibility score or ranking | Removed | Needs outcome labels this business will not have for a year, and it puts a model where a human must be |
+| Client-facing prompts | Removed | A matchmaker asking one question in a check-in does the same work without doubting a client who has a firm boundary |
+| Automatic rejection | Removed | The product informs the matchmaker. It does not decide |

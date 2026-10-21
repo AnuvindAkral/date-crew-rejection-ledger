@@ -14,6 +14,8 @@ Two things are worth stating plainly about how that assistance was used.
 
 **An independent review changed the work.** The design was reviewed twice by separate model sessions in fresh contexts, with instructions to challenge rather than to help. The second review ran on a different model from the one that produced the work and was explicitly given permission to kill the proposal. It did. It found that the distinctive mechanism was largely already implemented, that the genuinely new part was the riskiest part, and that the proposed metric pointed the wrong way. The scope changed as a result: the client-facing contradiction feature was removed, the acceptance debrief was kept matchmaker-side, and the sourcing scorecard was excluded. The review also caught that an earlier draft of my own research summary overstated what a meta-analysis found, and that overstatement was corrected rather than carried into the submission.
 
+**The third review changed the data model.** A later red-team pass found that the check compared dimension categories, so a candidate tagged with any diet attribute tripped a non-vegetarian dealbreaker, and a candidate in any city looked like a match for a stated preference for the Bangalore metro. Both were false results wearing the costume of findings. The comparison was rebuilt to work on values, which also produced the preference-mismatch state the submission had claimed but the code did not have. The review also found that a confirmed preference silenced its dimension permanently, so a client who rejected on it again was never prompted a second time. Both were fixed, and both are covered by tests.
+
 Two independent reviews is not a lot of scrutiny, and neither substitutes for a real matchmaker. The reasoning is recorded in [REVIEW_FINDINGS.md](REVIEW_FINDINGS.md) and [REVIEW_FINDINGS_PROTOTYPE.md](REVIEW_FINDINGS_PROTOTYPE.md) rather than presented as a clean run.
 
 ## Part two: AI inside the product
@@ -28,7 +30,9 @@ The decision path, end to end:
 | --- | --- | --- |
 | Capture a rejection reason | Matchmaker picks a dimension and severity | A keyword suggestion only |
 | Propose a dimension from free text | Suggestion proposes, matchmaker confirms or changes | The only suggestion in the product |
-| Conflict check, confirmed dealbreaker | Deterministic field comparison | No |
+| Conflict check, confirmed dealbreaker | Deterministic value comparison | No |
+| Preference mismatch check | Deterministic value comparison | No |
+| Missing information, untagged candidate | Deterministic | No |
 | Contradiction check, reject then accept | Deterministic, needs evidence from both events | No |
 | Acceptance debrief capture | Matchmaker writes what mattered and what surprised | No, and nothing is inferred |
 | Write a confirmed rule | The client's recorded words, recorded by the matchmaker | No |

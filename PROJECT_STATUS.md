@@ -22,7 +22,7 @@ Phase 2 of The Date Crew product growth assessment. Phase 1 research and diagnos
 | `src/` | Prototype source, zero dependency | Built |
 | `test/` | Rules, store, metrics, bootstrap and insights tests | 39 passing |
 | `screenshots/` | Clients, client detail, contradiction card | Captured |
-| `README.md`, `DEMO_SCRIPT.md`, `PILOT_PLAN.md`, `ASSESSMENT_NARRATIVE.md` | Run, demo, pilot and submission narrative | Complete |
+| `README.md`, `DEMO_SCRIPT.md`, `PILOT_PLAN.md`, `ASSESSMENT_NARRATIVE.md` | Run, demo, pilot and canonical submission response | Complete |
 | `PROJECT_STATUS.md` | This file | Current |
 
 Local git repository, no remote. gitleaks pre-commit hook active.

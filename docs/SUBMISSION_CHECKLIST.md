@@ -21,7 +21,7 @@ What goes out, what is done, and what is still pending. Nothing is published unt
 | Scorecard exclusion note | `docs/SOURCING_SCORECARD_GATE.md` | Done |
 | Curveball response | `docs/CURVEBALL_RESPONSE.md` | Done |
 | AI usage explanation | `docs/AI_USAGE.md` | Done |
-| Assignment narrative | `ASSESSMENT_NARRATIVE.md` | Done |
+| Canonical submission response | `ASSESSMENT_NARRATIVE.md` | Done. The primary answer; everything else in the repo is supporting detail |
 | Screenshots | `screenshots/` | Captured, unverified visually by this agent |
 | This checklist | `docs/SUBMISSION_CHECKLIST.md` | Done |
 

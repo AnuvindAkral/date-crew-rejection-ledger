@@ -42,7 +42,7 @@ Synthetic data only. Every name is invented.
 
 Press **Reset demo** first.
 
-**7. Open Priya S.** Point at the "Acceptance insights" panel. It shows one positive capture: *accepted Arjun T. — Personality or temperament — "Warmer and calmer in person than his profile suggested. Location mattered less than she expected."*
+**7. Open Priya S.** Point at the "Acceptance insights" panel. It shows one positive capture: *accepted Arjun T., Personality or temperament: "Warmer and calmer in person than his profile suggested. Location mattered less than she expected."*
 
 > Say: "The ledger captures the rejections. This captures the other half: what a yes taught us. Nothing here was inferred from the profile. The matchmaker wrote it down."
 

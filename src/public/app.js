@@ -223,7 +223,7 @@ function renderMeasurement() {
     <div class="panel">
       <table class="metrics">
         <tr><th>Stage</th><th>Count</th><th>Step rate</th></tr>
-        <tr><td>Profiles shared</td><td>1,000</td><td>—</td></tr>
+        <tr><td>Profiles shared</td><td>1,000</td><td>-</td></tr>
         <tr><td>Profiles accepted</td><td>310</td><td>31.0%</td></tr>
         <tr><td>Contact details shared</td><td>210</td><td>67.7%</td></tr>
         <tr><td>Conversations started</td><td>150</td><td>71.4%</td></tr>
@@ -244,7 +244,7 @@ function renderMeasurement() {
           <td>${a.conflicts} / ${a.coded}${a.coded ? ` = ${Math.round(a.rate * 100)}%` : ""}</td>
           <td>${b.eligible} eligible · ${b.numerator} repeat</td>
           <td>${b.hard} hard · ${b.settled} settled · ${b.contradiction} contradiction · ${b.plain} plain</td>
-          <td>${b.rate == null ? "—" : Math.round(b.rate * 100) + "%"}</td>
+          <td>${b.rate == null ? "n/a" : Math.round(b.rate * 100) + "%"}</td>
         </tr>`;
     })
     .join("");

@@ -23,7 +23,7 @@ A real channel-level scorecard needs real data: hundreds of profiles with `sourc
 
 ## What is the correct first step instead
 
-The interview protocol's question 3 — "how do you know whether a disappointing profile came from poor sourcing, incomplete information, or a mismatch in expectations?" — is the gate that comes before any scorecard. It establishes whether channel is even a meaningful axis to the people doing the work. A scorecard built before that question is answered optimises a dimension the matchmakers may not trust.
+The interview protocol's question 3, "how do you know whether a disappointing profile came from poor sourcing, incomplete information, or a mismatch in expectations?", is the gate that comes before any scorecard. It establishes whether channel is even a meaningful axis to the people doing the work. A scorecard built before that question is answered optimises a dimension the matchmakers may not trust.
 
 ## What was preserved
 

@@ -18,6 +18,8 @@ The point of this document is to be specific about what is assumed, so that the 
 | A8 | The criteria on file match what the client would say today | The check compares against them. A stale or wrong criterion produces a wrong check, and the tool has no way to tell |
 | A9 | A matchmaker will keep the criteria on file current | Nothing in the system reminds them. The change log records drift after the fact, it does not prevent it |
 | A10 | Enough shares are checked for the rate to mean anything | The rate is measured on checked shares only, and coverage is reported beside it. A pilot with low coverage would produce a number that looks precise and is not |
+| A11 | The automated audit agrees with what a person would code from the same file | The audit uses the same rule engine as the card, so it can inherit the engine's mistakes. It is consistent, which is what a measurement needs, and consistent is not the same as right. A blind human re-code of a sample is the check |
+| A12 | A criterion's direction is recorded the way the client meant it | A criterion says "must be vegetarian" or "must not be vegetarian", and only the client can say which. A misrecorded direction produces a check that is confidently wrong, and nothing in the tool can detect it |
 
 ## Proposed validation steps
 
@@ -41,7 +43,7 @@ Do not pitch the debrief or the scorecard before question five. The point is to 
 
 With two or three matchmakers and synthetic candidates, run the send review on cases they bring themselves. Measure how long the review takes, whether they look at the ledger, and whether it changes what they would send.
 
-**What it settles.** A3, A4 and A9, and it produces the capture latency figure the feasibility bar needs, which the prototype cannot produce because it runs on synthetic data. It should also cover the two steps the prototype makes easy and reality makes hard: keeping the client's criteria on file, and looking at the check at the moment of sending.
+**What it settles.** A3, A4 and A9, and it produces the capture latency figure the feasibility bar needs, which the prototype cannot produce because it runs on synthetic data. It should also cover the two steps the prototype makes easy and reality makes hard: keeping the client's criteria on file, and looking at the check at the moment of sending. If the matchmaker is asked to look at a criterion the prototype already recorded, the review is testing the thing that matters: whether the direction they record is the one the client meant.
 
 ### Step 3: check the denominator of the 35%
 
@@ -49,7 +51,13 @@ One conversation with whoever owns the funnel numbers, to establish whether the 
 
 **What it settles.** A6, and the size of the opportunity.
 
-### Step 4: the proposed pilot
+### Step 4: blind re-code a sample
+
+Take a sample of shared profiles from the baseline period, and have a second person who does not know which arm the client was in, and does not know what the automated audit said, re-code them by hand from the client's file and the shared profile. Compare the two.
+
+**What it settles.** A11, and the confidence interval on everything else. Without it the primary outcome is a number produced by the same rules as the thing it is measuring.
+
+### Step 5: the proposed pilot
 
 Only if steps 1 to 3 support the direction. The concurrent client-level design, metrics, guardrails, and stop conditions are in [PILOT_PLAN.md](../PILOT_PLAN.md).
 

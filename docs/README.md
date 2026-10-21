@@ -11,6 +11,7 @@ The assessment of record is [`../ASSIGNMENT_SUBMISSION.md`](../ASSIGNMENT_SUBMIS
 | [`DEMO_SCRIPT.md`](DEMO_SCRIPT.md) | The verified walkthrough, with what the screen shows at each beat |
 | [`PRODUCT_THINKING.md`](PRODUCT_THINKING.md) | The problem, the reasoning, the assumptions, and what would change the direction |
 | [`PRODUCT_DECISIONS.md`](PRODUCT_DECISIONS.md) | Each decision with its trade-off, the rejected alternative, and the feature classification |
+| [`MEASUREMENT_MODEL.md`](MEASUREMENT_MODEL.md) | The primary outcome, the adoption guardrail, the audit, and what a two-week pilot could and could not show |
 | [`VALIDATION_PLAN.md`](VALIDATION_PLAN.md) | The assumptions that need a real matchmaker, and the cheapest way to test each |
 | [`AI_USAGE.md`](AI_USAGE.md) | The disclosure, both for the assistance used in producing this work and for the AI inside the product |
 | [`SUBMISSION_CHECKLIST.md`](SUBMISSION_CHECKLIST.md) | Where each required item lives and what is still outstanding |

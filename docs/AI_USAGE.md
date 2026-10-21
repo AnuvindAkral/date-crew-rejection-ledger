@@ -16,6 +16,8 @@ Two things are worth stating plainly about how that assistance was used.
 
 **The third review changed the data model.** A later red-team pass found that the check compared dimension categories, so a candidate tagged with any diet attribute tripped a non-vegetarian dealbreaker, and a candidate in any city looked like a match for a stated preference for the Bangalore metro. Both were false results wearing the costume of findings. The comparison was rebuilt to work on values, which also produced the preference-mismatch state the submission had claimed but the code did not have. The review also found that a confirmed preference silenced its dimension permanently, so a client who rejected on it again was never prompted a second time. Both were fixed, and both are covered by tests.
 
+**The fourth review found the direction was still missing, and the metric could be gamed.** Even after the value comparison, a criterion still stored only a value, so the direction was inferred from the kind. A client who said "I only want a vegetarian partner" was flagged on the vegetarian candidate and passed on the non-vegetarian one, which is backwards. The direction is now recorded separately from the firmness. The same review pointed out that the primary metric was computed over the profiles a matchmaker chose to check, so it could improve if matchmakers stopped using the tool, and that the coverage figure printed next to it measured app-recorded shares against seeded history rather than whether anyone opened the card. The metric is now an audit over every share, and the card view is what the adoption guardrail is built on.
+
 Two independent reviews is not a lot of scrutiny, and neither substitutes for a real matchmaker. The reasoning is recorded in [REVIEW_FINDINGS.md](REVIEW_FINDINGS.md) and [REVIEW_FINDINGS_PROTOTYPE.md](REVIEW_FINDINGS_PROTOTYPE.md) rather than presented as a clean run.
 
 ## Part two: AI inside the product
@@ -33,6 +35,8 @@ The decision path, end to end:
 | Conflict check, confirmed dealbreaker | Deterministic value comparison | No |
 | Preference mismatch check | Deterministic value comparison | No |
 | Missing information, untagged candidate | Deterministic | No |
+| Criterion direction, must be or must not be | The matchmaker records it, from what the client said | No |
+| Auditing a past share | The server, against the criteria in force at the time | No |
 | Contradiction check, reject then accept | Deterministic, needs evidence from both events | No |
 | Acceptance debrief capture | Matchmaker writes what mattered and what surprised | No, and nothing is inferred |
 | Write a confirmed rule | The client's recorded words, recorded by the matchmaker | No |

@@ -84,7 +84,31 @@ The decisions that shaped the product, the trade-offs each one accepted, and the
 
 **Rejected.** Letting a model write a preference, decide a conflict, or draft a client message. The first two would breach the constraints above, and the third touches the most trust-sensitive thing a matchmaker sends.
 
-## 11. The records are the interface, not the source code
+## 11. A criterion has a direction and a firmness, and they are separate
+
+**Decision.** A criterion records a direction, must be or must not be, a set of values, and a level of firmness: stated preference, confirmed preference, or confirmed dealbreaker. The direction decides which way the comparison runs, the firmness decides how the finding is reported.
+
+**Trade-off.** One more thing for the matchmaker to record, and a multi-value picker instead of a dropdown.
+
+**Rejected.** Storing a dimension and a value and inferring the rest from the kind. A client who says "I only want a vegetarian partner" and one who says "I will not consider a vegetarian partner" produce the same record, and the check then flags the partner the client actually wanted. That was in the build, and an independent review found it. The direction is now recorded rather than inferred.
+
+## 12. The primary metric is audited over every share, not measured over the checked ones
+
+**Decision.** The primary outcome is the proportion of all profiles shared in the period that conflicted with a criterion on the client's file at the time, decided by an audit that runs on every share whichever arm the client is on and whether or not the card was opened. Adoption is reported beside it, separately.
+
+**Trade-off.** The audit needs the criteria to be versioned, so a criterion that changes later does not reach back and change how an old share is judged. That is more work in the store, and it is what makes the baseline comparable.
+
+**Rejected.** A rate over the profiles that were checked, with coverage printed underneath. A matchmaker who stops checking can improve the rate, and the reader has to combine the two numbers by hand to see it. That was the version a reviewer called out.
+
+## 13. A new client gets the check by default
+
+**Decision.** A new client starts on the intervention arm, and the operator can move a client to the control arm from the client page.
+
+**Trade-off.** The arm is visible to the matchmaker, which in a real pilot would risk changing their behaviour. That is a pilot problem rather than a prototype problem, and hiding it would be dishonest.
+
+**Rejected.** Starting new clients on the control arm. A matchmaker who adds a client and then finds the check never fires would conclude the tool does nothing, and they would be right about the tool they were looking at.
+
+## 14. The records are the interface, not the source code
 
 **Decision.** Clients, candidates, matchmakers and client criteria are created and edited through the interface, with validation on every write and stable ids behind every dropdown.
 
@@ -92,7 +116,7 @@ The decisions that shaped the product, the trade-offs each one accepted, and the
 
 **Rejected.** Leaving the seed data as the only way to get records in. A reviewer would have to edit a JavaScript file to see the product work, and the brief is explicit that a prototype nobody can exercise is not a prototype. The "acting as" a matchmaker selector also forces the attribution question, which per-matchmaker metrics need anyway.
 
-## 12. The primary metric is measured at the moment of sending
+## 15. The send-time check is recomputed by the server
 
 **Decision.** The server recomputes the check when a profile is shared and records it on the share event. The primary metric is confirmed-criterion conflicts over profiles shared and checked, with the two conflict components reported apart, coverage reported alongside, and the override rate reported separately.
 
@@ -100,7 +124,7 @@ The decisions that shaped the product, the trade-offs each one accepted, and the
 
 **Rejected.** Measuring the rate after the fact from rejections alone. It answers a different question, it cannot separate a conflict that was caught from one that reached the client, and it cannot be computed for the control arm, which is the comparison the whole pilot design rests on.
 
-## 13. What the prototype is and is not
+## 16. What the prototype is and is not
 
 **Decision.** The prototype is a mechanism demonstration on synthetic data, with a proposed pilot written up in `PILOT_PLAN.md` and a validation plan in `docs/VALIDATION_PLAN.md`. It is not described as production-ready, and no result is claimed from it.
 
@@ -120,7 +144,10 @@ Every feature that exists in the build, classified against the brief's four cate
 | Value-level comparison of criteria to attributes | Core | A category comparison is a proxy, and a proxy produces false conflicts and false support |
 | Client criteria as records, with kinds and values | Core | The check has nothing to compare against without them |
 | Rejection capture: dimension, severity, value, verbatim | Core | It is the mechanism that creates the history the check runs on |
-| The four states, including incomplete and untagged | Core | They are what stops missing data reading as a clean result |
+| The five findings, including incomplete and prior rejection | Core | They are what stops missing data reading as a clean result |
+| Criterion direction, recorded rather than inferred | Core | A requirement and a prohibition are opposite criteria, and only the client can say which is which |
+| The audited primary outcome over all shares | Core | A rate over the checked profiles improves when people stop checking |
+| The adoption guardrail, reported separately | Core | It is the thing that can move on its own, so it has to be visible next to the rate |
 | Matchmaker records and the acting-as selector | Supporting | Attribution is needed for per-matchmaker reads, and the brief asks for a matchmaker to be selectable |
 | Data entry for clients, candidates and criteria | Supporting | The brief requires a reviewer to be able to exercise the workflow without editing code |
 | The ad-hoc check from the Candidates view | Supporting | Lets a reviewer pick a client and a profile and see the check with nothing sent |
@@ -128,7 +155,7 @@ Every feature that exists in the build, classified against the brief's four cate
 | Criterion change log and withdrawal | Supporting | A preference change has to be explicit and traceable, and a withdrawn criterion must not vanish |
 | Rejection ledger by dimension, with contradiction markers | Supporting | It is the history the check reads, and it is what the matchmaker consults when the check is not enough |
 | Client clarification, and a rule written only from the client's words | Supporting | It is how a contradiction is settled without the tool guessing |
-| The send-time conflict rate, coverage, and the override rate | Supporting | The primary metric, and the only way to tell the two pilot arms apart |
+| The audit, the human confirmation step, and the per-client breakdown | Supporting | The primary outcome needs an audit, and an automated one needs a human to check it |
 | Acceptance debrief, surfaced at the next send | Later | A sensible next question, but there is no evidence matchmakers fail to capture it today |
 | The learning-loop consultation metric | Later | It measures use, not effect, and it is only meaningful if the debrief is used |
 | The keyword dimension suggestion | Later | A convenience standing in for a model, and the only place a model would sit |

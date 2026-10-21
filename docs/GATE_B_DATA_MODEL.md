@@ -56,13 +56,21 @@ The fixed vocabulary of twelve dimensions, each with a one-line definition and a
 | client_id | |
 | dimension | May be a vocabulary dimension or free form |
 | value | The specific value the criterion is about. A preference on location is a preference for a particular place, not for "location" in general |
-| kind | stated-preference or confirmed-dealbreaker |
+| operator | must_be or must_not_be. The direction the comparison runs in. Kept separate from kind, because they answer different questions |
+| values | The set of values the criterion is about. One, or several for a set such as two kinds of smoker |
+| kind | confirmed_dealbreaker, confirmed_preference, or stated_preference. How firm the client made it |
 | status | active, removed, or superseded |
 | source | onboarding, or client_answer |
 | note | The client's own words, where they were captured |
 | recorded_at | |
 | recorded_by | Matchmaker id |
 | confirmed_at | Set when a client answers the clarification question |
+| removed_at | Set when the criterion is withdrawn |
+| supersedes | The criterion this one replaced |
+
+A criterion is never edited in place. Saving over one supersedes it and writes a new record, so the file can be read as it stood at any past moment. That is what lets the audit judge a share from last month against the criteria that were in force then.
+
+**Direction and firmness are independent.** A confirmed dealbreaker of "must not be Vegetarian" and a confirmed dealbreaker of "must be Vegetarian" are opposite criteria that happen to share a kind. A stated preference of "must be Vegetarian" is advice where a confirmed dealbreaker of the same shape is a no.
 
 ### PreferenceEvent
 
@@ -188,6 +196,10 @@ The three things that are never conflated: a confirmed dealbreaker, a historical
 **R10. A preference and a dealbreaker are different objects.** A preference is a criterion the client might still trade against. A dealbreaker is one the client has confirmed they will not move on. The tool never promotes one into the other, and only the client can confirm a dealbreaker.
 
 **R11. The check is recomputed at the moment of sending.** The server runs the same evaluation when a profile is shared and records the result on the share event. The measured conflict rate is therefore a fact about the send, and it cannot be changed by what the interface claims. The control arm is measured the same way, with the result simply not shown.
+
+**R13. Every share is audited.** Whether or not the card was opened, and on either arm, each share is re-evaluated against the criteria that were in force at that moment and the result is stored. The audit is the basis of the primary metric, and it is separate from the card because it answers a different question: what the client had on file when the profile went out, rather than what the matchmaker could see.
+
+**R14. A card view is recorded.** When the matchmaker opens the card, the view is recorded with whether the check was on it. This is the evidence for the adoption guardrail, and it is the only thing that distinguishes a profile that was checked from one that was not.
 
 **R12. Recorded ids are unique.** Every generated id is checked against every id already in the workspace before it is used, so a new record can never land on an existing one and silently replace it.
 

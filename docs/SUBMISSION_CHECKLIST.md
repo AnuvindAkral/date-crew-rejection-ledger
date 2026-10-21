@@ -6,7 +6,7 @@ What the assessment brief asks for, where each item is, and what is still outsta
 
 | Brief item | Where | Status |
 | --- | --- | --- |
-| 1. Your answers, as a document | `ASSIGNMENT_SUBMISSION.md` | Done. Part 1 is 331 words, Part 2 is 540, Part 4 is 200, in the headings the brief asks for |
+| 1. Your answers, as a document | `ASSIGNMENT_SUBMISSION.md` | Done. Part 1 is 299 words, Part 2 is 495, Part 4 is 185, in the headings the brief asks for |
 | 2. Prototype: working link, screenshots or recording | `screenshots/`, run instructions in the submission and in `README.md` | Done. Seven screenshots re-captured against the current build, a local run command, and a verified walkthrough in `docs/DEMO_SCRIPT.md` |
 | 3. Code, on GitHub | The repository | Ready. No remote yet, publishing on approval |
 | 4. AI usage in 3 to 5 lines: tools, what for, one thing you disagreed with | `ASSIGNMENT_SUBMISSION.md`, the AI usage section | Done. Four lines, and the disagreement is a real one |
@@ -18,8 +18,9 @@ What the assessment brief asks for, where each item is, and what is still outsta
 | --- | --- |
 | `README.md` | The problem, the direction, the workflow, the implemented features, setup, run, test, demo |
 | `docs/README.md` | The document index, and which file is the assessment of record |
+| `docs/MEASUREMENT_MODEL.md` | The primary outcome, the adoption guardrail, the audit, and what a two-week pilot could and could not show |
 | `docs/PRODUCT_THINKING.md` | The problem, the reasoning, the assumptions, what would change the direction |
-| `docs/PRODUCT_DECISIONS.md` | Thirteen decisions with their trade-offs, plus the feature classification |
+| `docs/PRODUCT_DECISIONS.md` | Sixteen decisions with their trade-offs, plus the feature classification |
 | `docs/DEMO_SCRIPT.md` | Verified walkthrough with exact commands and expected results |
 | `docs/VALIDATION_PLAN.md` | The assumptions that need real matchmaker validation, and the proposed steps |
 | `docs/AI_USAGE.md` | AI disclosure, both the assistance used in producing the work and the AI inside the product |
@@ -27,7 +28,7 @@ What the assessment brief asks for, where each item is, and what is still outsta
 | `docs/SOURCING_SCORECARD_GATE.md` | Why the sourcing scorecard is excluded |
 | `docs/INTERVIEW_PROTOCOL.md` | The five matchmaker conversations, prepared and unrun |
 | `docs/GATE_B_*.md` | The metric definitions, experiment design, data model, decisions and sitemap from Gate B, kept as the working record |
-| `docs/REVIEW_*.md` | Both independent review rounds and their reconciliation |
+| `docs/REVIEW_*.md` | The independent review rounds and their reconciliation |
 | `phase1/` | The original research, funnel diagnosis, decisions and experiment |
 | `PILOT_PLAN.md` | The proposed live pilot, not authorised and not run |
 
@@ -35,14 +36,16 @@ What the assessment brief asks for, where each item is, and what is still outsta
 
 | Check | Result |
 | --- | --- |
-| Test suite | 85 pass, 0 fail, `node --test`, three consecutive runs with no flakiness |
-| Clean start | `npm start` from a wiped store serves the API, the page and the assets, and seeds itself |
-| Record creation, editing and persistence | A client and a criterion created through the API survive a server restart, along with the change log, and the check uses them afterwards |
-| Preference checking | Conflict, no conflict, missing information, untagged, uncoded history and preference mismatch are all exercised by the test suite and shown in the interface |
-| Matchmaker keeps control | Nothing is blocked, every override is logged with the check that preceded it, and no criterion changes without the client's words |
-| Links and file references | 102 checked across all markdown, 0 broken |
-| Secrets and personal data | gitleaks clean over 11 commits, no phone numbers, no personal email addresses, no keys in tracked files |
-| Screenshots | Seven, re-captured against the current build, each with zero console errors, and inspected |
+| Test suite | 104 pass, 0 fail, `node --test`, three consecutive runs with no flakiness |
+| Clean start | `npm start` from a wiped store serves the page, the API and the assets, and seeds itself. The store file is written on the first save, not on boot |
+| End to end, in the browser | Select the acting matchmaker, create a client, record a criterion with a direction, add a candidate with attributes, check without sending, send past a warning with a reason, and read the measurement. Every screen checked with zero console errors |
+| Invalid input | A duplicate client name and an empty name are both refused with a message naming the field, and no success message appears |
+| Persistence | A client and a criterion created through the API survive a server restart, along with the change log, and the check uses them afterwards |
+| Preference checking | Conflict, preference mismatch, contradiction, prior rejection, incomplete, untagged, uncoded history and no conflict are all exercised by the test suite and shown in the interface |
+| Matchmaker keeps control | Nothing is blocked, every override is logged with a reason, no criterion changes without the client's words, and the old version of a criterion is kept |
+| Links and file references | 115 checked across all markdown, 0 broken |
+| Secrets and personal data | gitleaks clean over the history, no phone numbers, no personal email addresses, no keys in tracked files |
+| Screenshots | Seven, re-captured against the current build, each with zero console errors, each inspected |
 | Em dashes and filler phrases | None in the public documents |
 | Licence | Not added, the choice is the user's |
 
@@ -57,5 +60,6 @@ What the assessment brief asks for, where each item is, and what is still outsta
 
 - No matchmaker has been interviewed and no real client data has been seen. The prototype demonstrates the mechanism and nothing about the business.
 - The 35% figure and its denominator are unconfirmed. The submission says so and gives the three readings.
-- The metric's denominator is the profiles that were checked, not every profile shared. Coverage is reported beside it so a rate that improves because the tool was used less stays visible.
+- The primary outcome is measured by an automated audit that uses the same rules as the check it measures. A real pilot needs a blind human re-code of a sample to know how much the rule engine misses. This is written into the measurement model and the validation plan, and it is the single biggest caveat on the metric.
 - The store is a JSON file with no concurrency control, which is fine for a local prototype and would not survive two people writing at once.
+- The pilot arms are visible to the matchmaker. In a real pilot that would need to be allocated centrally and hidden, so the arm does not change the matchmaker's behaviour.

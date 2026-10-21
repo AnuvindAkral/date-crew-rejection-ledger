@@ -8,7 +8,7 @@ depends_on: phase1/EXPERIMENT.md
 
 # GATE B: METRIC DEFINITIONS
 
-> **Superseded.** The primary metric in the final build is the confirmed-criterion conflict rate at send time, defined in [`../ASSIGNMENT_SUBMISSION.md`](../ASSIGNMENT_SUBMISSION.md) and implemented in `src/lib/metrics.js` as `computeSendTimeMetrics`. The two metrics below are kept as the working record of the design at Gate B, and Metric A survives as a post-hoc diagnostic. Read this file for the reasoning, not for the current definition.
+> **Superseded.** The primary metric in the final build is the audited confirmed-criterion conflict rate at send time, defined in [`MEASUREMENT_MODEL.md`](MEASUREMENT_MODEL.md) and implemented in `src/lib/metrics.js` as `computeOutcomeMetrics`. The two metrics below are kept as the working record of the design at Gate B, and Metric A survives as a post-hoc diagnostic. Read this file for the reasoning, not for the current definition.
 
 This file resolves the two metrics and the guardrails. It supersedes the Phase 1 "Contradiction Rate" wording, which conflated stated preferences with rejection history and left the denominator ambiguous.
 

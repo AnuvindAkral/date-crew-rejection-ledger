@@ -21,14 +21,14 @@ So the pre-send check is the product. The rejection ledger is the supporting mec
 When a matchmaker is about to share a profile, the tool loads that client's recorded criteria, compares them with the candidate's known attributes, and returns one of five findings:
 
 - **Conflict.** A confirmed dealbreaker matches the candidate's value.
-- **Preference mismatch.** The candidate's value does not match a stated preference. Advice, not a warning.
+- **Preference mismatch.** The candidate's value does not match a stated or confirmed preference. Advice, not a warning.
 - **Contradiction.** The client rejected on this dimension before and later accepted someone with it. A prompt to ask, not a rule.
 - **Prior rejection.** The client rejected on this dimension before and has not accepted since. A pattern, not a rule.
 - **Incomplete.** The client has a criterion here and the candidate's value is unknown. Never reported as "no conflict", because missing information is not agreement.
 
 When there is nothing to compare, the card says that instead of reporting a clean result: no feedback yet, untagged candidate, history present but uncoded, or no conflict.
 
-Comparisons are on values, not on categories. A candidate who is vegetarian does not trip a non-vegetarian dealbreaker, and a candidate in Pune does not look like a match for a stated preference for the Bangalore metro. That distinction was not in the first version and the independent review found it.
+A criterion records a **direction** and a **level of firmness** separately, because they are separate things. "Must be vegetarian" and "must not be vegetarian" are opposite criteria, and a model that stores only a dimension and a value cannot tell them apart. Comparisons are on values, not categories, so a vegetarian candidate does not trip a non-vegetarian dealbreaker. Both distinctions were missing from the first version, and the independent reviews found them.
 
 The matchmaker proceeds, holds, or asks the client. Nothing is blocked automatically, no criterion changes without the client's own words, and every override is logged with the check that preceded it.
 
@@ -38,19 +38,20 @@ Everything happens in the interface. No source file needs editing.
 
 1. **Pick who you are.** The header selector picks the matchmaker record you are acting as, and new records are attributed to it.
 2. **Create or open a client.** **Add a client** on the Clients view takes a name, a city, the journey stage, and the matchmaker who looks after them.
-3. **Record the client's criteria.** On the client, **Record what the client said** takes a dimension, a value, and whether it is an ordinary preference or an explicit no, plus the client's words. Saving over an existing criterion records what it replaced, and a criterion can be withdrawn without erasing what was once believed.
+3. **Record the client's criteria.** On the client, **Record what the client said** takes a dimension, a direction, one or more values, and how firm the client made it: a stated preference, a confirmed preference, or a confirmed dealbreaker. The client's words go in the note. Saving over an existing criterion records what it replaced, and a criterion can be withdrawn without erasing what was once believed.
 4. **Add a candidate.** On the Candidates view, **Add a candidate** takes the profile details and the attributes actually known. A blank attribute means unknown, never no.
 5. **Check before sending.** Put a candidate on a client's shortlist and open it, or use the **Check against this client** dropdown on the Candidates view to run the same check without sending anything.
-6. **Decide and record.** Send, hold, or ask the client. Rejections are captured as a dimension, a severity and the reason in the matchmaker's own words.
+6. **Decide and record.** Send, hold, or ask the client. Rejections are captured as a dimension, a severity and the reason in the matchmaker's own words. Sending past a warning asks for a reason, and the reason is kept.
 
 ## What is implemented
 
 - **The pre-send check.** Four states, each with the evidence that produced it, and the recorded criterion and candidate attribute named.
 - **Data entry in the interface.** Clients, candidates, matchmakers and client criteria, all with stable ids, all validated, all with dropdowns backed by the records themselves.
 - **Structured rejection capture.** A dimension, a severity, the value that was rejected, and the original wording, with a keyword suggestion for the dimension that a human confirms.
-- **A per-client rejection ledger.** History by dimension, contradiction markers, client-confirmed rules, and a change log of every criterion edit.
+- **A per-client rejection ledger.** History by dimension, contradiction markers, client-confirmed rules, and a change log of every criterion edit, with the old version kept and the date it was in force.
+- **Criteria with a direction.** Dimension, direction, values, and firmness, recorded separately. The check compares a known value against a known value in the direction the client set.
 - **Client clarification.** A rule is written only from a recorded client answer with the client's own words, never silently. A settled dimension does not silence the dimension forever: a later rejection on it is surfaced again.
-- **A send-time metric.** The server recomputes the check at the moment of sending and records it on the share, so the conflict rate is a fact about the send rather than a claim by the interface. The measurement view reports the two arms separately, the two conflict components separately, the coverage, and the override rate.
+- **A measurement model that cannot be improved by using the tool less.** The primary outcome is the proportion of *all* profiles shared in the period that conflicted with a criterion on the client's file at the time, decided by an audit that runs on every share whichever arm the client is on and whether or not the card was opened. The baseline is audited the same way. Adoption is reported beside it, separately, because that is the thing that can move on its own. The full model is in [docs/MEASUREMENT_MODEL.md](docs/MEASUREMENT_MODEL.md).
 - **A learning loop, built but presented as a next step.** An acceptance debrief that captures what a client's yes taught the matchmaker, surfaced at the next send with a checkbox, and a metric for whether captured insights get consulted.
 - **An operator-only measurement view**, kept away from the matchmaker it would otherwise measure.
 
@@ -81,18 +82,19 @@ node --test
 npm test
 ```
 
-85 tests cover the send-review rules and the ten decision-logic scenarios, the data-entry workflow and its validation, the metric computations, the store, the missing-data handling, and the acceptance-debrief loop. No build step, no install.
+104 tests cover the send-review rules, the ten decision-logic scenarios, what a criterion means in each direction, the data-entry workflow and its validation, the measurement model, the store, the missing-data handling, and the acceptance-debrief loop. No build step, no install.
 
 ## Demo
 
-Six short beats, about four minutes. Reset the demo before each beat.
+Seven short beats, about four minutes. Reset the demo before each beat.
 
 1. Open **Priya S.** Her ledger shows a contradiction on *Location or city tier*: rejected 3, then accepted 1. Send **Aarav M.** and the check fires before anything goes out, showing both the contradiction and the fact that he is in Pune when she had asked for the Bangalore metro.
 2. Open **Rahul M.** and send **Nikhil S.** The check fires a hard conflict, because he is non-vegetarian and that is a confirmed dealbreaker. Send **Dev P.** for the clean case: he is vegetarian, so the same dimension gives the opposite answer.
 3. Open **Neha K.** and send **Varun J.** The check says his position on children is unknown, rather than implying no conflict. Send **Ishita P.** and it says she does not want children, which is advice rather than a warning.
 4. Open the **Candidates** view, pick a client from the dropdown and press **Check against this client**. The same check runs with nothing sent.
-5. On **Clients**, press **Add a client**, then open that client and **Record what the client said**. Save over the same criterion and the change is recorded with what it replaced.
+5. On **Clients**, press **Add a client**, then open that client and **Record what the client said**. Pick a direction and a value, save over the same criterion and the change is recorded with what it replaced.
 6. Open **Meera J.** and send **Sam K.** She is on the control arm, so the check is computed but not surfaced.
+7. Open **Measurement**. The audited baseline sits beside the measurement window, with coverage, the overrides and their reasons, and a row per share that a reviewer can confirm or dispute.
 
 The word-for-word script is in [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md), and the screenshots in [screenshots/](screenshots/).
 
@@ -121,6 +123,7 @@ phase1/                the preserved Phase 1 research and decisions
 ## Where things are
 
 - The assessment of record is [ASSIGNMENT_SUBMISSION.md](ASSIGNMENT_SUBMISSION.md). It is the only document that is the answer to the brief.
+- The measurement model, in full, is in [docs/MEASUREMENT_MODEL.md](docs/MEASUREMENT_MODEL.md).
 - The reasoning is in [docs/PRODUCT_THINKING.md](docs/PRODUCT_THINKING.md), the decisions and their trade-offs in [docs/PRODUCT_DECISIONS.md](docs/PRODUCT_DECISIONS.md), and the full document index in [docs/README.md](docs/README.md).
 
 ## Data
@@ -130,3 +133,5 @@ Every name, city, profession and note is invented. No real client, matchmaker or
 ## What remains to be validated
 
 Nothing here has been tested with a real matchmaker, and no real client data has been seen. The specific open questions and the cheapest way to answer them are in [docs/VALIDATION_PLAN.md](docs/VALIDATION_PLAN.md). The short version: whether the 35% figure and its denominator are as reported, whether a matchmaker will consult the check at the point of sending, and whether the criteria on file are accurate enough to compare against.
+
+The measurement model is a proposed pilot design, not a demonstrated result. The numbers in the prototype come from synthetic data, and two weeks of a pilot could show whether the workflow is used and the rate moves. It could not show a business effect.

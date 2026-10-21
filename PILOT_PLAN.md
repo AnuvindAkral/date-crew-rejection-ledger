@@ -95,9 +95,15 @@ Stage definitions are written once, before the window, and applied identically b
 
 ## 9. Metrics
 
-**Primary.** Confirmed-criterion conflict rate at send time, client level. Numerator: profiles shared where the send-time check reported a conflict against a client-confirmed criterion, a confirmed dealbreaker or a confirmed preference. Denominator: profiles shared and checked. The check is recomputed by the server at the moment of sending, so the numerator is a fact about the send rather than a claim by the interface.
+**Primary.** Audited confirmed-criterion conflict rate at send time, client level. Numerator: profiles shared where the profile contained a conflict with a criterion the client had on file at the moment of sending, a confirmed dealbreaker or a stated or confirmed preference. Denominator: **every profile shared** in the period, not only the ones that were checked.
 
-Three numbers are reported alongside it, because the rate alone can flatter itself. **Coverage**, the share of all profiles that were checked, because a rate that improves because the tool was used less is not an improvement. **Unknown**, the share of checked profiles where the check could not be made because a candidate attribute is missing, which is never counted as clean. And the **override rate**, the share of detected conflicts that still reached the client.
+The numerator is decided by an audit, not by the card. Every share is re-evaluated after the fact against the criteria that were in force at that moment, on both arms and whether or not the card was opened. The denominator is every share, so sending less does not move the rate and stopping use of the tool does not move it either. The full design, including why the audit has to be separate from the card, is in [docs/MEASUREMENT_MODEL.md](docs/MEASUREMENT_MODEL.md).
+
+**Baseline.** The window before the intervention opens, audited by the same process, so the two periods are judged the same way. The comparison is between arms inside the window, not between a treated period and an untreated one from a different mix of clients.
+
+**Adoption guardrail, reported beside the primary and never combined into it.** The share of eligible profiles shared that had the check open before they went out. It is the number that can move on its own, so a primary rate that falls while adoption falls has to be visible as a failed guardrail rather than as a win.
+
+Three more numbers are reported alongside, because the rate alone can flatter itself. **Unknown coverage**, the share of audited profiles where the check could not be made because a candidate attribute is missing, which is never counted as clean. The **override rate** with the reason given for each override, because a matchmaker who overrides every warning has a tool that is not working. And the **human-confirmed rate**, from a periodic blind re-code of a sample, because an automated audit can inherit the rule engine's own mistakes.
 
 **Diagnostic.** Avoidable repeat-conflict rate (ARCR), client level. Numerator: eligible shared profiles rejected for a dimension with a prior coded rejection before the share. Denominator: eligible shared profiles. Reported with three sub-rates: hard-conflict, contradiction-conditional and plain-recurrence. ARCR measures recurrence, not avoidability, and the historical stated-preference conflict rate sits beside it as a post-hoc comparison to the brief's 35% figure.
 
@@ -151,14 +157,16 @@ A two-week window establishes feasibility and a directional signal only. Causal 
 ## 13. Operational owner and weekly review
 
 - One named pilot operator owns the run, holds the seed and the allocation list, and reviews the guardrails weekly.
-- Weekly review covers: capture rate and latency, card action and override rate, guardrail status, and any client- or matchmaker-reported friction.
+- Weekly review covers: capture rate and latency, card action and override rate, the adoption guardrail, the audited conflict rate against the baseline, guardrail status, and any client- or matchmaker-reported friction.
 - The decision rule is fixed before data collection and is not revised after results are seen.
+- A second reviewer blind-re-codes a sample of shared profiles each week, and the agreement with the automated audit is reported. Without it, the primary outcome is produced by the same rules as the thing it measures.
 
 ---
 
 ## 14. Requirements before a real TDC deployment
 
 1. Confirm the 35% denominator and the reject-then-accept pattern exist in TDC's population.
+1a. Confirm the criteria the tool compares against can be recorded accurately enough to compare against, direction included. A misrecorded direction produces a confidently wrong check that nothing in the tool can detect.
 2. Written consent from matchmakers and clients, and a data protection review against the DPDP Act 2023 and IT Act 2000 basis the company already relies on.
 3. Access to the existing CRM to read match histories and write the structured fields, or a side-by-side capture surface accepted by the matchmakers.
 4. A named operator and a pre-registered allocation list.

@@ -26,7 +26,7 @@ What goes out, what is done, and what is still pending. Nothing is published unt
 | Extended curveball thinking | `docs/CURVEBALL_RESPONSE.md` | Done. Supporting detail; the concise curveball is in the submission |
 | AI usage explanation | `docs/AI_USAGE.md` | Done |
 | Canonical submission response | `ASSIGNMENT_SUBMISSION.md` | Done. The primary answer; everything else in the repo is supporting detail |
-| Screenshots | `screenshots/` | Captured, unverified visually by this agent |
+| Screenshots | `screenshots/` | Re-captured against the current build and visually checked against the demo script |
 | This checklist | `docs/SUBMISSION_CHECKLIST.md` | Done |
 
 ## Pending

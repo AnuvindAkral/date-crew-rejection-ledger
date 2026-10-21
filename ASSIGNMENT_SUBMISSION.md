@@ -52,7 +52,7 @@ The claim is small: it reduces the cost of remembering and makes forgetting visi
 
 - **Working prototype:** yes. Run `node src/server.js`, open http://localhost:4321. Demo script in `docs/DEMO_SCRIPT.md`.
 - **Tests:** `node --test`, 40 pass.
-- **Screenshots:** three captured in `screenshots/`, not visually inspected by me; a human should glance before sharing.
+- **Screenshots:** three in `screenshots/`, re-captured against the current build and checked against the demo script.
 - **Code repository:** local git only, no remote yet.
 - **AI usage:** disclosed in `docs/AI_USAGE.md`. The only AI-shaped part is a keyword heuristic that proposes a dimension from free text, and a human confirms it. No scoring, ranking, or preference writes.
 - **Updated resume:** not done. Requires my actual resume and review.
